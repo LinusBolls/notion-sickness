@@ -1,0 +1,26 @@
+{
+  "manifest_version": 2,
+  "version": "1.0",
+
+  "name": "Notion Sickness",
+  "description": "Making scraping Notion data easy",
+
+  "author": "https://github.com/LinusBolls",
+  "homepage_url": "https://github.com/LinusBolls/notion-sickness",
+
+  "icons": {
+    "32": "assets/icons/icon-32.jpg"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["*://*.notion.so/*"],
+      "js": ["dist/index.js"]
+    }
+  ],
+  "browser_action": {
+    "default_icon": "assets/icons/icon-32.jpg",
+    "default_title": "Notion Sickness",
+    "default_popup": "index.html"
+  }
+}
