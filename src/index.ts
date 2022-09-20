@@ -1,6 +1,6 @@
 import Papa from "papaparse"
 
-import { Icon, Selector } from "./config.data"
+import { Icon, Selector, Text } from "./config.data"
 
 import fetchPage, { FetchPageResponse, PageSchema, PropertyType } from "./fetchPage"
 import fetchCollectionItems from "./fetchCollectionItems"
@@ -11,13 +11,15 @@ import getNotionHttpConfig from "./getNotionHttpConfig"
 
 type Status = { status: "not begun" | "working" | "finished" | "terminated", msg: string, data: any, errs: string[] }
 
-function toCsv(data: { [key: string]: any }[]) {
+function toCsv(data: { [key: string]: any }[], additionalKeys: string[]) {
 
     const keyRow = Object.keys(Object.values(data).reduce((obj, i) => ({ ...obj, ...i })))
 
-    const peopleRows = Object.values(data).map(i => Array(keyRow.length).fill(null).map((_, idx) => i?.[keyRow[idx]] ?? null))
+    const allKeysRow = [...keyRow, ...additionalKeys]
 
-    return [keyRow, ...peopleRows]
+    const peopleRows = Object.values(data).map(i => Array(allKeysRow.length).fill(null).map((_, idx) => i?.[allKeysRow[idx]] ?? null))
+
+    return [allKeysRow, ...peopleRows]
 }
 
 // 04418b8e32c44266a9bbd76acabbc092 => 04418b8e-32c4-4266-a9bb-d76acabbc092
@@ -25,9 +27,13 @@ const insertDashesIntoUuid = (uuid: string) => `${uuid.slice(0, 8)}-${uuid.slice
 
 const getSchema = (pageData: FetchPageResponse) => {
 
+    // console.log(Object.values(pageData?.recordMap?.collection ?? {})?.[0])
+
     const info = Object.values(pageData?.recordMap?.collection ?? {})?.[0]?.value?.value
 
-    const { schema = null, id = null } = info ?? {}
+    let { schema = null, id = null, deleted_schema, template_pages } = info ?? {}
+
+    // schema = {...deleted_schema != null && deleted_schema, ...schema != null && schema}
 
     const pageHasDb = schema != null && id != null
 
@@ -90,7 +96,7 @@ const loadCollection = async (collectionId: string, viewId: string) => {
     return await collectionCache[key]
 }
 
-const getValues = async (value: string, type: PropertyType): Promise<string[]> => {
+const getValues = async (value: string, type: PropertyType, key: string): Promise<string[]> => {
 
     const values = await Promise.all(value.map(async (i: any) => {
 
@@ -105,15 +111,39 @@ const getValues = async (value: string, type: PropertyType): Promise<string[]> =
         if (signifier === "‣") {
 
             try {
-                const foreignDb = await loadPage(foreignKey)
+                const foreignPage = await loadPage(foreignKey)
 
-                // const foreignDbSchema = getSchema(foreignDb)
+                const foreignTitle = Object.values(foreignPage?.recordMap?.block ?? {})?.[0]?.value?.value?.properties?.title?.[0]?.[0]
 
-                const collectionId = getDbBlocks(foreignDb)?.[0]?.value?.value?.collection_id
+                const foreignSchema = Object.values(foreignPage?.recordMap?.block ?? {})?.[0]?.value?.value?.properties
+                
+                const foreignValue = foreignSchema?.[key]
 
-                const viewId = Object.keys(foreignDb?.recordMap?.collection_view ?? {})?.[0]
+                // console.log(foreignValue, foreignTitle)
 
-                if (collectionId == null || viewId == null) return "AMOGUS"
+
+
+                const collectionId = getDbBlocks(foreignPage)?.[0]?.value?.value?.collection_id
+
+                const viewId = Object.keys(foreignPage?.recordMap?.collection_view ?? {})?.[0]
+
+                const hasTitle = foreignTitle != null 
+                const hasValue = foreignTitle != null
+                const hasDb = collectionId != null && viewId != null
+
+                // if (!(hasTitle || hasValue || hasDb)) console.log(foreignPage)
+
+                if (collectionId == null || viewId == null) {
+
+                    // console.log("unknown type:", foreignKey, value)
+
+                    if (hasTitle || hasValue) {
+
+                        console.log("title or value found instead of db")
+                    }
+
+                    return "AMOGUS"
+                }
 
                 const huch = await loadCollection(collectionId, viewId)
 
@@ -139,7 +169,7 @@ const toNewEntries = (peopleSchema: PageSchema) => async ([key, value]: any): Pr
 
     const { name, type } = peopleSchema[key] ?? { name: key, type: "N/A" }
 
-    const values = await getValues(value, type as any)
+    const values = await getValues(value, type as any, key)
 
     return [name, values]
 }
@@ -159,6 +189,11 @@ async function doWork(currentSpace: any, currentPageId: string, userId: string, 
     const pageData = await fetchPage(currentPageId)
 
     const { schema: collectionSchema, id: collectionId } = getSchema(pageData)
+
+    const rollups = Object.values(collectionSchema ?? {}).filter(i => i.type === "rollup").map(i => i.name + " (NOTION-SICKNESS DOES NOT SUPPORT ROLLUP PROPERTIES YET)")
+    const formulas = Object.values(collectionSchema ?? {}).filter(i => i.type === "formula").map(i => i.name + " (NOTION-SICKNESS DOES NOT SUPPORT FORMULA PROPERTIES YET)")
+
+    const unimplementedKeys = [...rollups, ...formulas]
 
     const spaceId = currentSpace?.id
 
@@ -189,7 +224,7 @@ async function doWork(currentSpace: any, currentPageId: string, userId: string, 
 
     step({ status: "working", msg: `Preparing Transform to CSV...`, data: null, errs: [] })
 
-    const csvArr = toCsv(refinedItems)
+    const csvArr = toCsv(refinedItems, unimplementedKeys)
 
     step({ status: "working", msg: `Creating CSV File...`, data: null, errs: [] })
 
@@ -216,11 +251,13 @@ function updateStatus(state: Status) {
 
         (document.querySelector(Selector.ICON) as HTMLElement).innerHTML = Icon.DOWNLOAD;
 
-        (document.querySelector(Selector.CONTROLS) as HTMLElement).innerHTML = `<a href="${data.dataUrl}" download="${data.fileName}" style="user-select: none; transition: background 20ms ease-in 0s; cursor: pointer; display: flex; align-items: center; flex-shrink: 0; white-space: nowrap; border-radius: 3px; font-size: 14px; line-height: 1; min-width: 0px; color: rgb(46, 170, 220); font-weight: 400; text-decoration: underline" class="notion-focusable">Download Database</a>`
+        (document.querySelector(Selector.CONTROLS) as HTMLElement).innerHTML = `<a href="${data.dataUrl}" download="${data.fileName}" style="user-select: none; transition: background 20ms ease-in 0s; cursor: pointer; display: flex; align-items: center; flex-shrink: 0; white-space: nowrap; border-radius: 3px; font-size: 14px; line-height: 1; min-width: 0px; color: rgb(46, 170, 220); font-weight: 400; text-decoration: underline" class="notion-focusable">${Text.DOWNLOAD}</a>`
 
-        // (document.querySelector(Selector.CONTROLS_PARENT) as HTMLElement).insertAdjacentHTML("beforeend", `<a href="${data.dataUrl}" download="${data.fileName}" style="user-select: none; transition: background 20ms ease-in 0s; cursor: pointer; display: flex; align-items: center; flex-shrink: 0; white-space: nowrap; height: 28px; border-radius: 3px; font-size: 14px; line-height: 1; min-width: 0px; padding: 6px; color: rgb(46, 170, 220); font-weight: 400;" class="notion-focusable">Download</a>`)
+        // (document.querySelector(Selector.CONTROLS_PARENT) as HTMLElement).insertAdjacentHTML("beforeend", `<div style="width: 50%">.json</div><div style="width: 50%">.csv</div>`)
     }
     if (status === "terminated") {
+
+        (document.querySelector(Selector.ICON) as HTMLElement).innerHTML = Icon.WARNING;
 
         (document.querySelector(Selector.CONTROLS_PARENT) as HTMLElement).insertAdjacentHTML("beforeend", errs.map(i => `<div>${i}</div>`).join(""))
     }
@@ -269,6 +306,13 @@ async function waitForElement(selector: string) {
 
 async function main() {
 
+    const css = `.linus-focusable:hover{ background-color: rgba(55, 53, 47, 0.08); }`;
+    const style = document.createElement("style");
+
+    style.appendChild(document.createTextNode(css));
+
+    document.querySelector("head")?.appendChild(style);
+
     const { currentSpace, currentPageId, userId } = await getCurrentSpace()
 
     const controlsParent = await waitForElement(Selector.CONTROLS_PARENT)
@@ -277,11 +321,13 @@ async function main() {
 
     const { pageHasDb } = getSchema(pageData)
 
-    controlsParent.insertAdjacentHTML("beforeend", `<div style="user-select: none; transition: background 20ms ease-in 0s; cursor: pointer; border-radius: 3px; margin-left: 4px; margin-right: 4px; width: calc(100% - 8px);" class="notion-focusable" role="button" tabindex="0"><div style="display: flex; align-items: center; width: 100%; font-size: 14px; min-height: 27px; padding: 2px 10px; margin-top: 1px; margin-bottom: 1px;"><div style="flex-shrink: 0; flex-grow: 0; border-radius: 3px; color: rgba(55, 53, 47, 0.65); width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; margin-right: 8px;">${Icon.DEFAULT}</div><div style="flex: 1 1 auto; white-space: nowrap; min-width: 0px; overflow: hidden; text-overflow: ellipsis;" class="linus-controls">${pageHasDb ? "Download Database" : "No Database Found"}</div></div></div>`);
+    controlsParent.insertAdjacentHTML("beforeend", `<div style="user-select: none; transition: background 20ms ease-in 0s; cursor: pointer; border-radius: 3px; margin-left: 4px; margin-right: 4px; width: calc(100% - 8px);" class="notion-focusable linus-focusable" role="button" tabindex="0"><div style="display: flex; align-items: center; width: 100%; font-size: 14px; min-height: 27px; padding: 2px 10px; margin-top: 1px; margin-bottom: 1px;"><div style="flex-shrink: 0; flex-grow: 0; border-radius: 3px; color: rgba(55, 53, 47, 0.65); width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; margin-right: 8px;">${Icon.DEFAULT}</div><div style="flex: 1 1 auto; white-space: nowrap; min-width: 0px; overflow: hidden; text-overflow: ellipsis;" class="linus-controls">${pageHasDb ? Text.DEFAULT : Text.CANNOT_EXPORT}</div></div></div>`);
 
     if (!pageHasDb) return
 
     (document.querySelector(Selector.CONTROLS) as HTMLElement).onclick = () => {
+
+        (document.querySelector(Selector.CONTROLS) as HTMLElement).onclick = () => {}
 
         (document.querySelector(Selector.ICON) as HTMLElement).innerHTML = Icon.WORKING
 

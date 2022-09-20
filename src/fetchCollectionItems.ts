@@ -50,5 +50,7 @@ export default async function fetchCollectionItems(collectionId: string, viewId:
     });
     const data = await res.json()
 
+    console.log("fetchCollectionItems:", data)
+
     return data
 }
