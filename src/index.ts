@@ -17,9 +17,9 @@ function toCsv(data: { [key: string]: any }[], additionalKeys: string[]) {
 
     const allKeysRow = [...keyRow, ...additionalKeys]
 
-    const peopleRows = Object.values(data).map(i => Array(allKeysRow.length).fill(null).map((_, idx) => i?.[allKeysRow[idx]] ?? null))
+    const valueRows = Object.values(data).map(i => Array(allKeysRow.length).fill(null).map((_, idx) => i?.[allKeysRow[idx]] ?? null))
 
-    return [allKeysRow, ...peopleRows]
+    return [allKeysRow, ...valueRows]
 }
 
 // 04418b8e32c44266a9bbd76acabbc092 => 04418b8e-32c4-4266-a9bb-d76acabbc092
@@ -52,14 +52,6 @@ const getCollectionInfo = (collectionData: any) => {
     const items = props.slice(0, -5)
 
     return { items, collectionTitle, spaceTitle }
-}
-const getName = (pageData: any) => {
-
-    const name = Object.values(pageData?.recordMap?.collection ?? {})?.[0]?.value?.value?.name?.[0]?.[0]
-
-    if (name == null) console.error("failed to locate name")
-
-    return name
 }
 const getViewIds = (pageData: any) => {
 
@@ -96,7 +88,107 @@ const loadCollection = async (collectionId: string, viewId: string) => {
     return await collectionCache[key]
 }
 
-const getValues = async (value: string, type: PropertyType, key: string): Promise<string[]> => {
+type PageId = string
+type SpaceId = string
+type Url = string // can also be phone nr
+
+type ThreeDing = ["p", PageId, SpaceId]
+type TwoDing = ["a", Url]
+
+type Seperator = [","]
+
+type RelationValue = (["‣", [ThreeDing]] | Seperator)[]
+
+type LinkValue = ([Url, [TwoDing]] | Seperator)[] // both urls can be empty!, not entirely sure if can have seperators but just to be sure
+
+type PlainValue = string[][]
+
+type PropertyValue = RelationValue | LinkValue | PlainValue
+
+// [
+//     [
+//       "https://codeuniversity.slack.com/team/UA6RCN6FL",
+//       [
+//         [
+//           "a",
+//           "https://codeuniversity.slack.com/team/UA6RCN6FL"
+//         ]
+//       ]
+//     ]
+// ]
+// [
+//     [
+//       "William Dry"
+//     ]
+// ]
+// [
+//     [
+//       "‣",
+//       [
+//         [
+//           "p",
+//           "3b66ccc2-9bcd-46f8-aba8-674abaf33a7c",
+//           "7cf1b6cc-df88-4bf5-afc7-bf5416fda723"
+//         ]
+//       ]
+//     ],
+//     [
+//       ","
+//     ],
+//     [
+//       "‣",
+//       [
+//         [
+//           "p",
+//           "5b8dc266-cf7b-49f8-9f15-fa22ec02e472",
+//           "7cf1b6cc-df88-4bf5-afc7-bf5416fda723"
+//         ]
+//       ]
+//     ]
+// ]
+const isPlainValue = (value: PropertyValue): value is PlainValue => value[0]?.length === 1
+const isLinkValue = (value: PropertyValue): value is LinkValue => value[1]?.[0] === "a"
+const isRelationValue = (value: PropertyValue): value is RelationValue => value[1]?.[0] === "p"
+
+const removeSeperators = (_: unknown, idx: number) => idx % 2 === 1;
+
+const getValues = async (value: PropertyValue, type: PropertyType, key: string): Promise<string[]> => {
+
+    // const newValue = (value).filter(removeSeperators)
+
+    // if (isPlainValue(value)) return newValue[0] as string[]
+    // if (isLinkValue(value)) return [newValue[0][0]]
+
+    // return value.map(i => {
+
+    //     const [signifier, [[pi, pageId, spaceId]]] = i
+
+    //     try {
+    //         const foreignPage = await loadPage(pageId)
+
+    //         const collectionId = getDbBlocks(foreignPage)?.[0]?.value?.value?.collection_id
+
+    //         const viewId = Object.keys(foreignPage?.recordMap?.collection_view ?? {})?.[0]
+
+    //         const wasPageDeleted = collectionId == null || viewId == null
+
+    //         if (wasPageDeleted) return undefined
+
+    //         const huch = await loadCollection(collectionId, viewId)
+
+    //         const keyToValue = Object
+    //             .entries(huch.recordMap.block)
+    //             .reduce((obj, [key, i]) => ({ ...obj, [key]: i?.value?.properties?.title?.[0]?.[0] }), {})
+
+    //         return keyToValue[pageId]
+
+    //     } catch (err) {
+
+    //         console.error("uncaught error")
+
+    //         return null
+    //     }
+    // })
 
     const values = await Promise.all(value.map(async (i: any) => {
 
@@ -104,46 +196,22 @@ const getValues = async (value: string, type: PropertyType, key: string): Promis
 
         if (i?.length === 1) return i[0]
 
-        const [signifier, [[pi, foreignKey, spaceId]]] = i
+        const [signifier, [[pi, pageId, spaceId]]] = i
 
         if (signifier === ",") return null
 
         if (signifier === "‣") {
 
             try {
-                const foreignPage = await loadPage(foreignKey)
-
-                const foreignTitle = Object.values(foreignPage?.recordMap?.block ?? {})?.[0]?.value?.value?.properties?.title?.[0]?.[0]
-
-                const foreignSchema = Object.values(foreignPage?.recordMap?.block ?? {})?.[0]?.value?.value?.properties
-                
-                const foreignValue = foreignSchema?.[key]
-
-                // console.log(foreignValue, foreignTitle)
-
-
+                const foreignPage = await loadPage(pageId)
 
                 const collectionId = getDbBlocks(foreignPage)?.[0]?.value?.value?.collection_id
 
                 const viewId = Object.keys(foreignPage?.recordMap?.collection_view ?? {})?.[0]
 
-                const hasTitle = foreignTitle != null 
-                const hasValue = foreignTitle != null
-                const hasDb = collectionId != null && viewId != null
+                const wasPageDeleted = collectionId == null || viewId == null
 
-                // if (!(hasTitle || hasValue || hasDb)) console.log(foreignPage)
-
-                if (collectionId == null || viewId == null) {
-
-                    // console.log("unknown type:", foreignKey, value)
-
-                    if (hasTitle || hasValue) {
-
-                        console.log("title or value found instead of db")
-                    }
-
-                    return "AMOGUS"
-                }
+                if (wasPageDeleted) return undefined
 
                 const huch = await loadCollection(collectionId, viewId)
 
@@ -151,7 +219,7 @@ const getValues = async (value: string, type: PropertyType, key: string): Promis
                     .entries(huch.recordMap.block)
                     .reduce((obj, [key, i]) => ({ ...obj, [key]: i?.value?.properties?.title?.[0]?.[0] }), {})
 
-                return keyToValue[foreignKey]
+                return keyToValue[pageId]
 
             } catch (err) {
 
@@ -162,20 +230,23 @@ const getValues = async (value: string, type: PropertyType, key: string): Promis
         }
         return null
     }))
-    return values
+    return values.filter((i: (string | undefined)[]) => Array.isArray(i) ? !(i?.every((j: string | undefined) => j === "," || typeof j === "undefined")) : true)
 }
 
-const toNewEntries = (peopleSchema: PageSchema) => async ([key, value]: any): Promise<[string, string[]]> => {
+const toNewEntries = (schema: PageSchema) => async ([key, value]: any): Promise<[string, string[]][]> => {
 
-    const { name, type } = peopleSchema[key] ?? { name: key, type: "N/A" }
+    if (!(key in schema)) return []
 
-    const values = await getValues(value, type as any, key)
+    const { name, type } = schema[key]
 
-    return [name, values]
+    const values = await getValues(value, type, key)
+
+    return [[name, values]]
+
 }
-const toNewPerson = (peopleSchema: PageSchema) => async (i: any) => {
+const toNewPerson = (schema: PageSchema) => async (i: any) => {
 
-    const newEntryPromises = Object.entries(i ?? {})?.map(toNewEntries(peopleSchema))
+    const newEntryPromises = Object.entries(i ?? {})?.flatMap(toNewEntries(schema))
 
     const newPerson = Object.fromEntries(await Promise.all(newEntryPromises))
 
@@ -183,6 +254,11 @@ const toNewPerson = (peopleSchema: PageSchema) => async (i: any) => {
 }
 
 async function doWork(currentSpace: any, currentPageId: string, userId: string, step: (status: Status) => void) {
+
+    // console.log("doWork this:", this)
+    // console.log("doWork this.status:", this?.status)
+
+    this.status = { status: "working", msg: "Fetching Page Info...", data: null, errs: [] }
 
     step({ status: "working", msg: "Fetching Page Info...", data: null, errs: [] })
 
@@ -237,6 +313,8 @@ async function doWork(currentSpace: any, currentPageId: string, userId: string, 
     const dataUrl = "data:text/csv;base64," + btoa(utf8Csv)
 
     const fileName = spaceTitle + "-" + collectionTitle + "-db.csv"
+
+    this.status = { status: "finished", msg: `Ready to Download`, data: { dataUrl, fileName }, errs: [] }
 
     step({ status: "finished", msg: `Ready to Download`, data: { dataUrl, fileName }, errs: [] })
 }
@@ -304,34 +382,102 @@ async function waitForElement(selector: string) {
     })
 }
 
-async function main() {
 
-    const css = `.linus-focusable:hover{ background-color: rgba(55, 53, 47, 0.08); }`;
-    const style = document.createElement("style");
+const shouldMountControls = async (status: Status) => {
 
-    style.appendChild(document.createTextNode(css));
+    console.log("checking:", status)
 
-    document.querySelector("head")?.appendChild(style);
+    if (status?.status === "working") return false
 
-    const { currentSpace, currentPageId, userId } = await getCurrentSpace()
+    const controlsEl = document.querySelector(".linus-container");
 
-    const controlsParent = await waitForElement(Selector.CONTROLS_PARENT)
+    const controlsParentEl = await waitForElement(Selector.CONTROLS_PARENT);
 
-    const pageData = await fetchPage(currentPageId)
+    return true
 
-    const { pageHasDb } = getSchema(pageData)
+    return controlsParentEl != null && controlsEl == null;
+}
+class AppStateController {
 
-    controlsParent.insertAdjacentHTML("beforeend", `<div style="user-select: none; transition: background 20ms ease-in 0s; cursor: pointer; border-radius: 3px; margin-left: 4px; margin-right: 4px; width: calc(100% - 8px);" class="notion-focusable linus-focusable" role="button" tabindex="0"><div style="display: flex; align-items: center; width: 100%; font-size: 14px; min-height: 27px; padding: 2px 10px; margin-top: 1px; margin-bottom: 1px;"><div style="flex-shrink: 0; flex-grow: 0; border-radius: 3px; color: rgba(55, 53, 47, 0.65); width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; margin-right: 8px;">${Icon.DEFAULT}</div><div style="flex: 1 1 auto; white-space: nowrap; min-width: 0px; overflow: hidden; text-overflow: ellipsis;" class="linus-controls">${pageHasDb ? Text.DEFAULT : Text.CANNOT_EXPORT}</div></div></div>`);
+    status: Status = { status: "not begun", msg: "Fetching Page Info...", data: null, errs: [] };
 
-    if (!pageHasDb) return
+    async mountControls() {
 
-    (document.querySelector(Selector.CONTROLS) as HTMLElement).onclick = () => {
+        const css = `.linus-focusable:hover{ background-color: rgba(55, 53, 47, 0.08); }`;
+        const style = document.createElement("style");
+    
+        style.appendChild(document.createTextNode(css));
+    
+        document.querySelector("head")?.appendChild(style);
 
-        (document.querySelector(Selector.CONTROLS) as HTMLElement).onclick = () => {}
+        const controlsParent = document.querySelector(Selector.CONTROLS_PARENT) as HTMLElement
+    
+        const controls = document.querySelector(".linus-container")
+    
+        controls?.parentNode?.removeChild(controls);
+    
+        controlsParent.insertAdjacentHTML("beforeend",
+            `<div style="user-select: none; transition: background 20ms ease-in 0s; cursor: pointer; border-radius: 3px; margin-left: 4px; margin-right: 4px; width: calc(100% - 8px);" class="notion-focusable linus-focusable linus-container" role="button" tabindex="0">
+                <div style="display: flex; align-items: center; width: 100%; font-size: 14px; min-height: 27px; padding: 2px 10px; margin-top: 1px; margin-bottom: 1px;">
+                    <div style="flex-shrink: 0; flex-grow: 0; border-radius: 3px; color: rgba(55, 53, 47, 0.65); width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; margin-right: 8px;" class="linus-icon">
+                        ${Icon.WORKING}
+                    </div>
+                    <div style="flex: 1 1 auto; white-space: nowrap; min-width: 0px; overflow: hidden; text-overflow: ellipsis;" class="linus-controls">
+                        Checking for Database...
+                    </div>
+                </div>
+            </div>`
+        );
+    
+        const { currentSpace, currentPageId, userId } = await getCurrentSpace()
+    
+        
+    
+        const pageData = await fetchPage(currentPageId)
+    
+        const { pageHasDb } = getSchema(pageData);
 
-        (document.querySelector(Selector.ICON) as HTMLElement).innerHTML = Icon.WORKING
 
-        doWork(currentSpace, currentPageId, userId, updateStatus)
+        (document.querySelector(".linus-icon") as HTMLElement).innerHTML = Icon.DEFAULT;
+        (document.querySelector(".linus-controls") as HTMLElement).innerHTML = pageHasDb ? Text.DEFAULT : Text.CANNOT_EXPORT
+    
+        if (!pageHasDb) return
+    
+        (document.querySelector(Selector.CONTROLS) as HTMLElement).onclick = (function() {
+    
+            (document.querySelector(Selector.CONTROLS) as HTMLElement).onclick = () => { }
+    
+            (document.querySelector(Selector.ICON) as HTMLElement).innerHTML = Icon.WORKING
+    
+            // doWork(currentSpace, currentPageId, userId, updateStatus)
+
+            doWork.call(this, currentSpace, currentPageId, userId, updateStatus);
+        }).bind(this)
+    }
+
+    async checkMount() {
+
+        if (await shouldMountControls(this.status)) this.mountControls()
     }
 }
-main()
+
+
+
+class WindowLocationObserver {
+
+    lastWindowHref: string;
+
+    observe(callback: any) {
+
+        const didLocationChange = window.location.href !== this.lastWindowHref;
+
+        this.lastWindowHref = window.location.href;
+
+        if (didLocationChange) callback()
+    }
+    startObserving(callback: any) { setInterval(this.observe, 50, callback) }
+}
+
+const controller = new AppStateController()
+
+new WindowLocationObserver().startObserving(() => controller.checkMount())
