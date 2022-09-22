@@ -9,6 +9,8 @@ import fetchSpaces from "./fetchSpaces"
 import fetchUserInfo from "./fetchUserInfo"
 import getNotionHttpConfig from "./getNotionHttpConfig"
 import openExportPopup from "./openExportPopup"
+import Notion from "./Notion"
+import fetchPageInfo from "./fetchPageInfo"
 
 type Status = { status: "not begun" | "working" | "finished" | "terminated", msg: string, data: any, errs: string[] }
 
@@ -23,8 +25,7 @@ function toCsv(data: { [key: string]: any }[], additionalKeys: string[]) {
     return [allKeysRow, ...valueRows]
 }
 
-// 04418b8e32c44266a9bbd76acabbc092 => 04418b8e-32c4-4266-a9bb-d76acabbc092
-const insertDashesIntoUuid = (uuid: string) => `${uuid.slice(0, 8)}-${uuid.slice(8, 12)}-${uuid.slice(12, 16)}-${uuid.slice(16, 20)}-${uuid.slice(20)}`
+
 
 const getSchema = (pageData: FetchPageResponse) => {
 
@@ -80,11 +81,11 @@ const loadPage = async (key: string) => {
 
 const collectionCache: { [key: string]: any } = {}
 
-const loadCollection = async (collectionId: string, viewId: string) => {
+const loadCollection = async (spaceId: string, collectionId: string, viewId: string) => {
 
     const key = collectionId + ":" + viewId
 
-    if (!(key in collectionCache)) collectionCache[key] = fetchCollectionItems(collectionId, viewId)
+    if (!(key in collectionCache)) collectionCache[key] = fetchCollectionItems(spaceId, collectionId, viewId)
 
     return await collectionCache[key]
 }
@@ -214,7 +215,7 @@ const getValues = async (value: PropertyValue, type: PropertyType, key: string):
 
                 if (wasPageDeleted) return undefined
 
-                const huch = await loadCollection(collectionId, viewId)
+                const huch = await loadCollection(spaceId, collectionId, viewId)
 
                 const keyToValue = Object
                     .entries(huch.recordMap.block)
@@ -254,31 +255,21 @@ const toNewPerson = (schema: PageSchema) => async (i: any) => {
     return newPerson
 }
 
-async function doWork(currentSpace: any, currentPageId: string, userId: string, step: (status: Status) => void) {
+async function doWork(spaceId: string, currentPageId: string, userId: string, viewId: string, collectionId: string, collectionSchema: any, step: (status: Status) => void) {
 
     // console.log("doWork this:", this)
     // console.log("doWork this.status:", this?.status)
 
     this.status = { status: "working", msg: "Fetching Page Info...", data: null, errs: [] }
 
-    step({ status: "working", msg: "Fetching Page Info...", data: null, errs: [] })
-
-    const pageData = await fetchPage(currentPageId)
-
-    const { schema: collectionSchema, id: collectionId } = getSchema(pageData)
-
     const rollups = Object.values(collectionSchema ?? {}).filter(i => i.type === "rollup").map(i => i.name + " (NOTION-SICKNESS DOES NOT SUPPORT ROLLUP PROPERTIES YET)")
     const formulas = Object.values(collectionSchema ?? {}).filter(i => i.type === "formula").map(i => i.name + " (NOTION-SICKNESS DOES NOT SUPPORT FORMULA PROPERTIES YET)")
 
     const unimplementedKeys = [...rollups, ...formulas]
 
-    const spaceId = currentSpace?.id
-
-    const viewId = getViewIds(pageData)?.[0]
-
-    const httpConfig = getNotionHttpConfig(userId, spaceId, currentPageId)
-
     if (collectionSchema == null || collectionId == null || spaceId == null || viewId == null) {
+
+        console.log({collectionSchema, collectionId, spaceId, viewId})
 
         step({ status: "terminated", msg: "something went wrong", data: null, errs: ["Failed to Gather Notion Info"] })
 
@@ -287,7 +278,7 @@ async function doWork(currentSpace: any, currentPageId: string, userId: string, 
     step({ status: "working", msg: "Fetching Database Rows...", data: null, errs: [] })
 
     // can go wrong
-    const data = await fetchCollectionItems(collectionId, viewId)
+    const data = await fetchCollectionItems(spaceId, collectionId, viewId)
 
     // can go wrong
     const { items, collectionTitle, spaceTitle } = getCollectionInfo(data)
@@ -319,20 +310,25 @@ async function doWork(currentSpace: any, currentPageId: string, userId: string, 
 
     this.status = { status: "finished", msg: `Ready to Download`, data: {}, errs: [] }
 
-    step({ status: "finished", msg: `Ready to Download`, data: { files: {
-        csv: {
-            name: fileName + ".csv",
-            url: csvDataUrl,
-        },
-        xml: {
-            name: fileName + ".xml",
-            url: "",
-        },
-        json: {
-            name: fileName + ".json",
-            url: jsonDataUrl,
-        },
-    } }, errs: [] })
+    step({
+        status: "finished", msg: `Ready to Download`, data: {
+            collectionTitle, files: {
+
+                csv: {
+                    name: fileName + ".csv",
+                    url: csvDataUrl,
+                },
+                xml: {
+                    name: fileName + ".xml",
+                    url: "",
+                },
+                json: {
+                    name: fileName + ".json",
+                    url: jsonDataUrl,
+                },
+            }
+        }, errs: []
+    })
 }
 
 function updateStatus(state: Status) {
@@ -367,26 +363,6 @@ interface SpaceViewPointer {
     spaceId: string // uuid of space
 }
 
-async function getCurrentSpace() {
-
-    // notion annoyingly messes with the url while loading, so this has to be gotten as soon as possible
-    const [, currentSpaceDomain, currentPageId, ...rest] = window.location.pathname.split("/")
-
-    const spaces = await fetchSpaces()
-
-    const { user_id: userId } = await fetchUserInfo()
-
-    const spaceAndViewIds = Object.values(Object.values(spaces ?? {})?.[0]?.user_root ?? {})?.[0]?.value?.value?.space_view_pointers as SpaceViewPointer[]
-
-    const spaceInfo = await fetchSpaceInfo(spaceAndViewIds.map(i => i.spaceId))
-
-    const combined = spaceAndViewIds.map((i, idx) => ({ viewId: i.id, ...spaceInfo.results[idx] }))
-
-    const currentSpace = combined.filter(i => currentSpaceDomain === i.domain)?.[0]
-
-    return { currentSpace, currentPageId: insertDashesIntoUuid(currentPageId), userId }
-}
-
 async function waitForElement(selector: string) {
 
     return new Promise<HTMLElement>((res) => {
@@ -402,10 +378,67 @@ async function waitForElement(selector: string) {
     })
 }
 
+// 04418b8e32c44266a9bbd76acabbc092 => 04418b8e-32c4-4266-a9bb-d76acabbc092
+const insertDashesIntoUuid = (uuid: unknown) => typeof uuid === "string" ? `${uuid.slice(0, 8)}-${uuid.slice(8, 12)}-${uuid.slice(12, 16)}-${uuid.slice(16, 20)}-${uuid.slice(20)}` : null
+
+async function getCurrentPageInfo() {
+
+    const rawBlockId = window.location.pathname.split("/").slice(-1)?.[0]?.split("-")?.slice(-1)?.[0];
+
+    const pageId = insertDashesIntoUuid(rawBlockId);
+
+    const pageData = await fetchPage(pageId);
+
+    const { block, collection, collection_view } = pageData?.recordMap ?? {};
+
+    const userId = "";
+
+    const spaceId = Object.values(block ?? {})?.[0]?.value?.value?.space_id;
+
+    const collectionSchema = Object.values(collection ?? {})?.[0]?.value?.value?.schema
+
+    const collectionId = Object.values(collection ?? {})?.[0]?.value?.value?.id;
+
+    const viewId = Object.values(collection_view ?? {})?.[0]?.value?.value?.id;
+
+    const hasCollection = collectionId != null && collectionSchema != null;
+
+    return { userId, pageId, spaceId, viewId, collectionId, hasCollection, collectionSchema }
+}
+
+// async function getCurrentSpace() {
+
+//     const rawBlockId = window.location.pathname.split("/").slice(-1)?.[0]?.split("-")?.slice(-1)?.[0]
+
+//     const blockId = insertDashesIntoUuid(rawBlockId)
+
+//     const foo = await fetchPage(blockId)
+
+//     const {block, collection_view, collection } = foo?.recordMap ?? {}
+
+//     const spaceId = Object.values(foo?.recordMap?.space ?? {})?.[0]?.spaceId
+
+//     const collectionId = Object.values(collection ?? {})?.[0]?.value?.value?.id
+
+//     const viewId = Object.values(collection_view ?? {})?.[0]?.value?.value?.id
+
+//     const spaces = await fetchSpaces()
+
+//     const { user_id: userId } = await fetchUserInfo()
+
+//     const spaceAndViewIds = Object.values(Object.values(spaces ?? {})?.[0]?.user_root ?? {})?.[0]?.value?.value?.space_view_pointers as SpaceViewPointer[]
+
+//     const spaceInfo = await fetchSpaceInfo(spaceAndViewIds.map(i => i.spaceId))
+
+//     const combined = spaceAndViewIds.map((i, idx) => ({ viewId: i.id, ...spaceInfo.results[idx] }))
+
+//     const currentSpace = combined.filter(i => i.id === spaceId)?.[0]
+
+//     return { currentSpace, currentPageId: blockId, userId }
+// }
+
 
 const shouldMountControls = async (status: Status) => {
-
-    console.log("checking:", status)
 
     if (status?.status === "working") return false
 
@@ -425,17 +458,17 @@ class AppStateController {
 
         const css = `.linus-focusable:hover{ background-color: rgba(55, 53, 47, 0.08); }`;
         const style = document.createElement("style");
-    
+
         style.appendChild(document.createTextNode(css));
-    
+
         document.querySelector("head")?.appendChild(style);
 
         const controlsParent = document.querySelector(Selector.CONTROLS_PARENT) as HTMLElement
-    
+
         const controls = document.querySelector(".linus-container")
-    
+
         controls?.parentNode?.removeChild(controls);
-    
+
         controlsParent.insertAdjacentHTML("beforeend",
             `<div style="user-select: none; transition: background 20ms ease-in 0s; cursor: pointer; border-radius: 3px; margin-left: 4px; margin-right: 4px; width: calc(100% - 8px);" class="notion-focusable linus-focusable linus-container" role="button" tabindex="0">
                 <div style="display: flex; align-items: center; width: 100%; font-size: 14px; min-height: 27px; padding: 2px 10px; margin-top: 1px; margin-bottom: 1px;">
@@ -448,30 +481,20 @@ class AppStateController {
                 </div>
             </div>`
         );
-    
-        const { currentSpace, currentPageId, userId } = await getCurrentSpace()
-    
-        
-    
-        const pageData = await fetchPage(currentPageId)
-    
-        const { pageHasDb } = getSchema(pageData);
-
+        const { userId, pageId, spaceId, viewId, collectionId, hasCollection, collectionSchema } = await getCurrentPageInfo();
 
         (document.querySelector(".linus-icon") as HTMLElement).innerHTML = Icon.DEFAULT;
-        (document.querySelector(".linus-controls") as HTMLElement).innerHTML = pageHasDb ? Text.DEFAULT : Text.CANNOT_EXPORT
-    
-        if (!pageHasDb) return
-    
-        (document.querySelector(Selector.CONTROLS) as HTMLElement).onclick = (function() {
-    
-            (document.querySelector(Selector.CONTROLS) as HTMLElement).onclick = () => { }
-    
-            (document.querySelector(Selector.ICON) as HTMLElement).innerHTML = Icon.WORKING
-    
-            // doWork(currentSpace, currentPageId, userId, updateStatus)
+        (document.querySelector(".linus-controls") as HTMLElement).innerHTML = hasCollection ? Text.DEFAULT : Text.CANNOT_EXPORT
 
-            doWork.call(this, currentSpace, currentPageId, userId, updateStatus);
+        if (!hasCollection) return
+
+        (document.querySelector(Selector.CONTROLS) as HTMLElement).onclick = (function () {
+
+            (document.querySelector(Selector.CONTROLS) as HTMLElement).onclick = () => { }
+
+            (document.querySelector(Selector.ICON) as HTMLElement).innerHTML = Icon.WORKING
+
+            doWork.call(this, spaceId, pageId, userId, viewId, collectionId, collectionSchema, updateStatus);
         }).bind(this)
     }
 

@@ -1,4 +1,4 @@
-export default function getNotionHttpConfig(userId: string, spaceId: string, pageId: string) {
+export default function getNotionHttpConfig(userId: string | null, spaceId: string, pageId: string) {
     return {
         "credentials": "include",
         "headers": {
@@ -7,7 +7,7 @@ export default function getNotionHttpConfig(userId: string, spaceId: string, pag
             "Accept-Language": "en-US,en;q=0.5",
             "notion-client-version": "23.10.26.29",
             "notion-audit-log-platform": "web",
-            "x-notion-active-user-header": userId,
+            ...userId != null && { "x-notion-active-user-header": userId },
             "Content-Type": "application/json",
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
