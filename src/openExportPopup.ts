@@ -110,7 +110,7 @@ export default function openExportPopup(data: any) {
                                 </div>
                             </div>
                         </div> -->
-                        <a href="${json.url}" download="${json.name}">
+                        <a href="${json.url}" download="${json.name}" style="color: rgb(55, 53, 47); text-decoration: none">
                         <div style="user-select: none; transition: background 200ms ease-out 0s; cursor: pointer; display: flex; align-items: center; padding: 10px 8px 10px 10px; border-radius: 3px; margin-bottom: 12px; box-shadow: rgba(15, 15, 15, 0.1) 0px 0px 0px 1px, rgba(15, 15, 15, 0.1) 0px 2px 4px; background: white none repeat scroll 0% 0%;"
                             class="notion-focusable" role="button" tabindex="0">
                             <div
@@ -130,7 +130,7 @@ export default function openExportPopup(data: any) {
                             </div>
                         </div>
                         </a>
-                        <a href="${csv.url}" download="${csv.name}">
+                        <a href="${csv.url}" download="${csv.name}" style="color: rgb(55, 53, 47); text-decoration: none">
                         <div style="user-select: none; transition: background 200ms ease-out 0s; cursor: pointer; display: flex; align-items: center; padding: 10px 8px 10px 10px; border-radius: 3px; margin-bottom: 12px; box-shadow: rgba(15, 15, 15, 0.1) 0px 0px 0px 1px, rgba(15, 15, 15, 0.1) 0px 2px 4px; background: white none repeat scroll 0% 0%;"
                             class="notion-focusable" role="button" tabindex="0">
                             <div
@@ -150,7 +150,7 @@ export default function openExportPopup(data: any) {
                             </div>
                         </div>
                         </a>
-                        <a href="${xml.url}" download="${xml.name}">
+                        <a href="${xml.url}" download="${xml.name}" style="color: rgb(55, 53, 47); text-decoration: none">
                         <div style="user-select: none; transition: background 200ms ease-out 0s; cursor: pointer; display: flex; align-items: center; padding: 10px 8px 10px 10px; border-radius: 3px; margin-bottom: 12px; box-shadow: rgba(15, 15, 15, 0.1) 0px 0px 0px 1px, rgba(15, 15, 15, 0.1) 0px 2px 4px; background: white none repeat scroll 0% 0%;"
                             class="notion-focusable" role="button" tabindex="0">
                             <div
