@@ -1,16 +1,36 @@
 import Papa from "papaparse"
+// import { json2xml } from "xml-js";
 
 import { Icon, Selector, Text } from "./config.data"
-
-import fetchPage, { FetchPageResponse, PageSchema, PropertyType } from "./fetchPage"
+import fetchPage, { PageSchema, PropertyType } from "./fetchPage"
 import fetchCollectionItems from "./fetchCollectionItems"
-import fetchSpaceInfo from "./fetchSpaceInfo"
-import fetchSpaces from "./fetchSpaces"
-import fetchUserInfo from "./fetchUserInfo"
-import getNotionHttpConfig from "./getNotionHttpConfig"
 import openExportPopup from "./openExportPopup"
-import Notion from "./Notion"
-import fetchPageInfo from "./fetchPageInfo"
+
+function jsonToXml(obj: any) {
+    var xml = '';
+    for (var prop in obj) {
+        xml += "<" + prop + ">";
+        if(Array.isArray(obj[prop])) {
+            for (var array of obj[prop]) {
+
+                // A real botch fix here
+                xml += "</" + prop + ">";
+                xml += "<" + prop + ">";
+
+                xml += jsonToXml(new Object(array));
+            }
+        } else if (typeof obj[prop] == "object") {
+            xml += jsonToXml(new Object(obj[prop]));
+        } else {
+            xml += obj[prop];
+        }
+        xml += "</" + prop + ">";
+    }
+    var xml = xml.replace(/<\/?[0-9]{1,}>/g,'');
+    return xml
+}
+
+
 
 type Status = { status: "not begun" | "working" | "finished" | "terminated", msg: string, data: any, errs: string[] }
 
@@ -25,23 +45,6 @@ function toCsv(data: { [key: string]: any }[], additionalKeys: string[]) {
     return [allKeysRow, ...valueRows]
 }
 
-
-
-const getSchema = (pageData: FetchPageResponse) => {
-
-    // console.log(Object.values(pageData?.recordMap?.collection ?? {})?.[0])
-
-    const info = Object.values(pageData?.recordMap?.collection ?? {})?.[0]?.value?.value
-
-    let { schema = null, id = null, deleted_schema, template_pages } = info ?? {}
-
-    // schema = {...deleted_schema != null && deleted_schema, ...schema != null && schema}
-
-    const pageHasDb = schema != null && id != null
-
-    return { schema, id, pageHasDb }
-}
-
 // response ends with [null, { title: [["People"]] }, null, null, { title: [["Knowledge Space"]] }], not sure if this is always the case
 type MetaData = [null, { title: [[string]] }, null, null, { title: [[string]] }]
 
@@ -54,14 +57,6 @@ const getCollectionInfo = (collectionData: any) => {
     const items = props.slice(0, -5)
 
     return { items, collectionTitle, spaceTitle }
-}
-const getViewIds = (pageData: any) => {
-
-    const viewIds = Object.values(pageData?.recordMap?.block ?? {})?.[0]?.value?.value?.view_ids
-
-    if (viewIds == null || viewIds?.length === 0) console.error("failed to locate view ids")
-
-    return viewIds
 }
 const getDbBlocks = (dings: any) => {
 
@@ -243,7 +238,7 @@ const toNewEntries = (schema: PageSchema) => async ([key, value]: any): Promise<
 
     const values = await getValues(value, type, key)
 
-    return [[name, values]]
+    return [name, values]
 
 }
 const toNewPerson = (schema: PageSchema) => async (i: any) => {
@@ -257,9 +252,6 @@ const toNewPerson = (schema: PageSchema) => async (i: any) => {
 
 async function doWork(spaceId: string, currentPageId: string, userId: string, viewId: string, collectionId: string, collectionSchema: any, step: (status: Status) => void) {
 
-    // console.log("doWork this:", this)
-    // console.log("doWork this.status:", this?.status)
-
     this.status = { status: "working", msg: "Fetching Page Info...", data: null, errs: [] }
 
     const rollups = Object.values(collectionSchema ?? {}).filter(i => i.type === "rollup").map(i => i.name + " (NOTION-SICKNESS DOES NOT SUPPORT ROLLUP PROPERTIES YET)")
@@ -268,8 +260,6 @@ async function doWork(spaceId: string, currentPageId: string, userId: string, vi
     const unimplementedKeys = [...rollups, ...formulas]
 
     if (collectionSchema == null || collectionId == null || spaceId == null || viewId == null) {
-
-        console.log({collectionSchema, collectionId, spaceId, viewId})
 
         step({ status: "terminated", msg: "something went wrong", data: null, errs: ["Failed to Gather Notion Info"] })
 
@@ -298,15 +288,23 @@ async function doWork(spaceId: string, currentPageId: string, userId: string, vi
 
     const csvStr = Papa.unparse(csvArr)
 
+    const jsonStr = JSON.stringify(refinedItems);
+
+    // const xmlStr = json2xml(jsonStr, { compact: true })
+
+    const xmlStr = jsonToXml(jsonStr)
+
     // encode characters that cause btoa() to throw
-    const utf8Csv = unescape(encodeURIComponent(csvStr))
+    const removeNonUtf8Chars = (str: string) => unescape(encodeURIComponent(str))
 
     // base64 csv string and create data url
-    const csvDataUrl = "data:text/csv;base64," + btoa(utf8Csv)
+    const csvDataUrl = "data:text/csv;base64," + btoa(removeNonUtf8Chars(csvStr))
 
-    const jsonDataUrl = "data:application/json;base64," + btoa(JSON.stringify(refinedItems))
+    const jsonDataUrl = "data:application/json;base64," + btoa(removeNonUtf8Chars(jsonStr))
 
-    const fileName = spaceTitle + "-" + collectionTitle + "-db"
+    const xmlDataUrl = "data:application/xml;base64," + btoa(removeNonUtf8Chars(xmlStr))
+
+    const fileName = spaceTitle + "-" + collectionTitle + "-db";
 
     this.status = { status: "finished", msg: `Ready to Download`, data: {}, errs: [] }
 
@@ -406,43 +404,11 @@ async function getCurrentPageInfo() {
     return { userId, pageId, spaceId, viewId, collectionId, hasCollection, collectionSchema }
 }
 
-// async function getCurrentSpace() {
-
-//     const rawBlockId = window.location.pathname.split("/").slice(-1)?.[0]?.split("-")?.slice(-1)?.[0]
-
-//     const blockId = insertDashesIntoUuid(rawBlockId)
-
-//     const foo = await fetchPage(blockId)
-
-//     const {block, collection_view, collection } = foo?.recordMap ?? {}
-
-//     const spaceId = Object.values(foo?.recordMap?.space ?? {})?.[0]?.spaceId
-
-//     const collectionId = Object.values(collection ?? {})?.[0]?.value?.value?.id
-
-//     const viewId = Object.values(collection_view ?? {})?.[0]?.value?.value?.id
-
-//     const spaces = await fetchSpaces()
-
-//     const { user_id: userId } = await fetchUserInfo()
-
-//     const spaceAndViewIds = Object.values(Object.values(spaces ?? {})?.[0]?.user_root ?? {})?.[0]?.value?.value?.space_view_pointers as SpaceViewPointer[]
-
-//     const spaceInfo = await fetchSpaceInfo(spaceAndViewIds.map(i => i.spaceId))
-
-//     const combined = spaceAndViewIds.map((i, idx) => ({ viewId: i.id, ...spaceInfo.results[idx] }))
-
-//     const currentSpace = combined.filter(i => i.id === spaceId)?.[0]
-
-//     return { currentSpace, currentPageId: blockId, userId }
-// }
-
-
 const shouldMountControls = async (status: Status) => {
 
     if (status?.status === "working") return false
 
-    const controlsEl = document.querySelector(".linus-container");
+    const controlsEl = document.querySelector(Selector.CONTAINER);
 
     const controlsParentEl = await waitForElement(Selector.CONTROLS_PARENT);
 
@@ -465,7 +431,7 @@ class AppStateController {
 
         const controlsParent = document.querySelector(Selector.CONTROLS_PARENT) as HTMLElement
 
-        const controls = document.querySelector(".linus-container")
+        const controls = document.querySelector(Selector.CONTAINER)
 
         controls?.parentNode?.removeChild(controls);
 
@@ -483,8 +449,8 @@ class AppStateController {
         );
         const { userId, pageId, spaceId, viewId, collectionId, hasCollection, collectionSchema } = await getCurrentPageInfo();
 
-        (document.querySelector(".linus-icon") as HTMLElement).innerHTML = Icon.DEFAULT;
-        (document.querySelector(".linus-controls") as HTMLElement).innerHTML = hasCollection ? Text.DEFAULT : Text.CANNOT_EXPORT
+        (document.querySelector(Selector.ICON) as HTMLElement).innerHTML = hasCollection ? Icon.DEFAULT : Icon.NOT_AVAILABLE;
+        (document.querySelector(Selector.CONTROLS) as HTMLElement).innerHTML = hasCollection ? Text.DEFAULT : Text.CANNOT_EXPORT
 
         if (!hasCollection) return
 
@@ -523,4 +489,15 @@ class WindowLocationObserver {
 
 const controller = new AppStateController()
 
-new WindowLocationObserver().startObserving(() => controller.checkMount())
+new WindowLocationObserver().startObserving(() => controller.checkMount());
+
+// (async () => {
+
+    // storage.managed is read-only
+    // await browser.storage.managed.set({ amogus: "sus" });
+
+    // will not work with temp id
+    // const amogus = await browser.storage.managed.get("amogus");
+
+    // console.log(amogus)
+// })()

@@ -28,8 +28,6 @@ async function getCurrentSpace() {
 
     const currentSpace = combined.filter(i => currentSpaceDomain === i.domain)?.[0]
 
-    console.log(currentSpace?.id)
-
     return { currentSpace, currentPageId: insertDashesIntoUuid(currentPageId), userId }
 }
 

@@ -50,7 +50,5 @@ export default async function fetchCollectionItems(spaceId: string, collectionId
     });
     const data = await res.json()
 
-    console.log("fetchCollectionItems:", data)
-
     return data
 }

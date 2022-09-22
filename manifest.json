@@ -22,5 +22,6 @@
     "default_icon": "assets/icons/icon-32.jpg",
     "default_title": "Notion Sickness",
     "default_popup": "index.html"
-  }
+  },
+  "permissions": ["storage"]
 }
