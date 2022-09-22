@@ -8,6 +8,7 @@ import fetchSpaceInfo from "./fetchSpaceInfo"
 import fetchSpaces from "./fetchSpaces"
 import fetchUserInfo from "./fetchUserInfo"
 import getNotionHttpConfig from "./getNotionHttpConfig"
+import openExportPopup from "./openExportPopup"
 
 type Status = { status: "not begun" | "working" | "finished" | "terminated", msg: string, data: any, errs: string[] }
 
@@ -310,13 +311,28 @@ async function doWork(currentSpace: any, currentPageId: string, userId: string, 
     const utf8Csv = unescape(encodeURIComponent(csvStr))
 
     // base64 csv string and create data url
-    const dataUrl = "data:text/csv;base64," + btoa(utf8Csv)
+    const csvDataUrl = "data:text/csv;base64," + btoa(utf8Csv)
 
-    const fileName = spaceTitle + "-" + collectionTitle + "-db.csv"
+    const jsonDataUrl = "data:application/json;base64," + btoa(JSON.stringify(refinedItems))
 
-    this.status = { status: "finished", msg: `Ready to Download`, data: { dataUrl, fileName }, errs: [] }
+    const fileName = spaceTitle + "-" + collectionTitle + "-db"
 
-    step({ status: "finished", msg: `Ready to Download`, data: { dataUrl, fileName }, errs: [] })
+    this.status = { status: "finished", msg: `Ready to Download`, data: {}, errs: [] }
+
+    step({ status: "finished", msg: `Ready to Download`, data: { files: {
+        csv: {
+            name: fileName + ".csv",
+            url: csvDataUrl,
+        },
+        xml: {
+            name: fileName + ".xml",
+            url: "",
+        },
+        json: {
+            name: fileName + ".json",
+            url: jsonDataUrl,
+        },
+    } }, errs: [] })
 }
 
 function updateStatus(state: Status) {
@@ -329,7 +345,11 @@ function updateStatus(state: Status) {
 
         (document.querySelector(Selector.ICON) as HTMLElement).innerHTML = Icon.DOWNLOAD;
 
-        (document.querySelector(Selector.CONTROLS) as HTMLElement).innerHTML = `<a href="${data.dataUrl}" download="${data.fileName}" style="user-select: none; transition: background 20ms ease-in 0s; cursor: pointer; display: flex; align-items: center; flex-shrink: 0; white-space: nowrap; border-radius: 3px; font-size: 14px; line-height: 1; min-width: 0px; color: rgb(46, 170, 220); font-weight: 400; text-decoration: underline" class="notion-focusable">${Text.DOWNLOAD}</a>`
+        // (document.querySelector(Selector.CONTROLS) as HTMLElement).innerHTML = `<a href="${data.dataUrl}" download="${data.fileName}" style="user-select: none; transition: background 20ms ease-in 0s; cursor: pointer; display: flex; align-items: center; flex-shrink: 0; white-space: nowrap; border-radius: 3px; font-size: 14px; line-height: 1; min-width: 0px; color: rgb(46, 170, 220); font-weight: 400; text-decoration: underline" class="notion-focusable">${Text.DOWNLOAD}</a>`
+
+        (document.querySelector(Selector.CONTROLS) as HTMLElement).innerHTML = `<button style="border: none; background: none; text-decoration: none !important ; user-select: none; transition: background 20ms ease-in 0s; cursor: pointer; display: flex; align-items: center; flex-shrink: 0; white-space: nowrap; border-radius: 3px; font-size: 14px; line-height: 1; min-width: 0px; color: rgb(46, 170, 220); font-weight: 400; text-decoration: underline" class="notion-focusable">${Text.DOWNLOAD}</button>`;
+
+        (document.querySelector(Selector.CONTROLS + " button") as HTMLElement).onclick = () => openExportPopup(data)
 
         // (document.querySelector(Selector.CONTROLS_PARENT) as HTMLElement).insertAdjacentHTML("beforeend", `<div style="width: 50%">.json</div><div style="width: 50%">.csv</div>`)
     }
@@ -465,13 +485,13 @@ class AppStateController {
 
 class WindowLocationObserver {
 
-    lastWindowHref: string;
+    lastPathname: string;
 
     observe(callback: any) {
 
-        const didLocationChange = window.location.href !== this.lastWindowHref;
+        const didLocationChange = window.location.pathname !== this.lastPathname;
 
-        this.lastWindowHref = window.location.href;
+        this.lastPathname = window.location.pathname;
 
         if (didLocationChange) callback()
     }
