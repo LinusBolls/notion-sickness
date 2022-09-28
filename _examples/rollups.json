@@ -1,0 +1,68 @@
+{
+    "*>r<": {
+        "name": "Stage ",
+        "type": "rollup",
+        "target_property": "2)<e", // not set
+        "relation_property": "nN>c", // set
+        "target_property_type": "relation"
+    },
+    "7Es.": {
+        "name": "Group",
+        "type": "rollup",
+        "target_property": "cF.t",
+        "relation_property": "nN>c",
+        "target_property_type": "relation"
+    },
+    "Q?(m": {
+        "name": "No of mentees",
+        "type": "rollup",
+        "formula": {
+            "id": "uOP7", // set
+            "name": "Mentees (linked)",
+            "type": "property",
+            "result_type": "text"
+        },
+        "aggregation": "count_values",
+        "target_property": "title",
+        "relation_property": "uOP7",
+        "target_property_type": "title"
+    },
+    "S?Pj": {
+        "name": "No of buddies",
+        "type": "rollup",
+        "formula": {
+            "id": "uOP7",
+            "name": "Mentees (linked)",
+            "type": "property",
+            "result_type": "text"
+        },
+        "aggregation": "unique",
+        "target_property": "title",
+        "relation_property": "FYh]",
+        "target_property_type": "title"
+    },
+    "kQC:": {
+        "name": "Faculty: Modules from Study Program",
+        "type": "rollup",
+        "aggregation": "show_unique",
+        "target_property": "HC}D",
+        "relation_property": ";Uxi",
+        "target_property_type": "relation"
+    },
+    "pSfF": {
+        "name": "Faculty: No of Modules",
+        "type": "rollup",
+        "aggregation": "unique",
+        "target_property": "title",
+        "relation_property": ";Uxi",
+        "target_property_type": "title"
+    },
+    "sz+N": {
+        "name": "Department",
+        "type": "rollup",
+        "aggregation": "show_unique",
+        "target_property": "^Pd{",
+        "relation_property": "`!ml",
+        "target_property_type": "relation"
+    }
+}

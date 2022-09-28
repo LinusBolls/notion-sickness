@@ -5,13 +5,15 @@ import { Icon, Selector, Text } from "./config.data"
 import fetchPage, { PageSchema, PropertyType } from "./fetchPage"
 import fetchCollectionItems from "./fetchCollectionItems"
 import openExportPopup from "./openExportPopup"
+import getCoverImgFromPageData from "./getCoverImgFromPageData"
 
+// src: https://stackoverflow.com/a/48789311
 function jsonToXml(obj: any) {
-    var xml = '';
-    for (var prop in obj) {
+    let xml = '';
+    for (const prop in obj) {
         xml += "<" + prop + ">";
-        if(Array.isArray(obj[prop])) {
-            for (var array of obj[prop]) {
+        if (Array.isArray(obj[prop])) {
+            for (const array of obj[prop]) {
 
                 // A real botch fix here
                 xml += "</" + prop + ">";
@@ -26,7 +28,8 @@ function jsonToXml(obj: any) {
         }
         xml += "</" + prop + ">";
     }
-    var xml = xml.replace(/<\/?[0-9]{1,}>/g,'');
+    xml = xml.replace(/<\/?[0-9]{1,}>/g, '');
+
     return xml
 }
 
@@ -50,9 +53,13 @@ type MetaData = [null, { title: [[string]] }, null, null, { title: [[string]] }]
 
 const getCollectionInfo = (collectionData: any) => {
 
-    const props = Object.values(collectionData?.recordMap?.block ?? {}).map(i => i?.value?.properties) as any[] & MetaData
+    const props = Object.values(collectionData?.recordMap?.block ?? {}).map(i => ({ props: i?.value?.properties, id: i?.value?.id })) as any[] & MetaData
 
-    const [, { title: [[collectionTitle]] }, , , { title: [[spaceTitle]] }] = props.slice(-5) as any as MetaData
+    const isEmpty = props.slice(-5).every(i => i.props == null)
+
+    if (isEmpty) console.error("collection is empty")
+
+    const [, { title: [[collectionTitle]] }, , , { title: [[spaceTitle]] }] = props.map(i => i.props).slice(-5) as any as MetaData
 
     const items = props.slice(0, -5)
 
@@ -143,49 +150,51 @@ type PropertyValue = RelationValue | LinkValue | PlainValue
 //       ]
 //     ]
 // ]
-const isPlainValue = (value: PropertyValue): value is PlainValue => value[0]?.length === 1
-const isLinkValue = (value: PropertyValue): value is LinkValue => value[1]?.[0] === "a"
-const isRelationValue = (value: PropertyValue): value is RelationValue => value[1]?.[0] === "p"
+// const isPlainValue = (value: PropertyValue): value is PlainValue => value[0]?.length === 1
+// const isLinkValue = (value: PropertyValue): value is LinkValue => value[1]?.[0] === "a"
+// const isRelationValue = (value: PropertyValue): value is RelationValue => value[1]?.[0] === "p"
 
-const removeSeperators = (_: unknown, idx: number) => idx % 2 === 1;
+// const removeSeperators = (_: unknown, idx: number) => idx % 2 === 1;
+
+// const improvedGetValues = async (value: PropertyValue, type: PropertyType, key: string): Promise<string[]> => {
+//         const newValue = (value).filter(removeSeperators)
+
+//     if (isPlainValue(value)) return newValue[0] as string[]
+//     if (isLinkValue(value)) return [newValue[0][0]]
+
+//     return value.map(i => {
+
+//         const [signifier, [[pi, pageId, spaceId]]] = i
+
+//         try {
+//             const foreignPage = await loadPage(pageId)
+
+//             const collectionId = getDbBlocks(foreignPage)?.[0]?.value?.value?.collection_id
+
+//             const viewId = Object.keys(foreignPage?.recordMap?.collection_view ?? {})?.[0]
+
+//             const wasPageDeleted = collectionId == null || viewId == null
+
+//             if (wasPageDeleted) return undefined
+
+//             const huch = await loadCollection(collectionId, viewId)
+
+//             const keyToValue = Object
+//                 .entries(huch.recordMap.block)
+//                 .reduce((obj, [key, i]) => ({ ...obj, [key]: i?.value?.properties?.title?.[0]?.[0] }), {})
+
+//             return keyToValue[pageId]
+
+//         } catch (err) {
+
+//             console.error("uncaught error")
+
+//             return null
+//         }
+//     })
+// }
 
 const getValues = async (value: PropertyValue, type: PropertyType, key: string): Promise<string[]> => {
-
-    // const newValue = (value).filter(removeSeperators)
-
-    // if (isPlainValue(value)) return newValue[0] as string[]
-    // if (isLinkValue(value)) return [newValue[0][0]]
-
-    // return value.map(i => {
-
-    //     const [signifier, [[pi, pageId, spaceId]]] = i
-
-    //     try {
-    //         const foreignPage = await loadPage(pageId)
-
-    //         const collectionId = getDbBlocks(foreignPage)?.[0]?.value?.value?.collection_id
-
-    //         const viewId = Object.keys(foreignPage?.recordMap?.collection_view ?? {})?.[0]
-
-    //         const wasPageDeleted = collectionId == null || viewId == null
-
-    //         if (wasPageDeleted) return undefined
-
-    //         const huch = await loadCollection(collectionId, viewId)
-
-    //         const keyToValue = Object
-    //             .entries(huch.recordMap.block)
-    //             .reduce((obj, [key, i]) => ({ ...obj, [key]: i?.value?.properties?.title?.[0]?.[0] }), {})
-
-    //         return keyToValue[pageId]
-
-    //     } catch (err) {
-
-    //         console.error("uncaught error")
-
-    //         return null
-    //     }
-    // })
 
     const values = await Promise.all(value.map(async (i: any) => {
 
@@ -220,7 +229,7 @@ const getValues = async (value: PropertyValue, type: PropertyType, key: string):
 
             } catch (err) {
 
-                console.error("uncaught error")
+                console.error("uncaught error inside getValues()")
 
                 return null
             }
@@ -243,11 +252,15 @@ const toNewEntries = (schema: PageSchema) => async ([key, value]: any): Promise<
 }
 const toNewPerson = (schema: PageSchema) => async (i: any) => {
 
-    const newEntryPromises = Object.entries(i ?? {})?.flatMap(toNewEntries(schema))
+    const { props, id } = i;
+
+    const coverImg = await getCoverImgFromPageData(id)
+
+    const newEntryPromises = Object.entries(props ?? {})?.flatMap(toNewEntries(schema))
 
     const newPerson = Object.fromEntries(await Promise.all(newEntryPromises))
 
-    return newPerson
+    return { ...newPerson, "Notion Cover Image Url": coverImg, "Notion Id": id }
 }
 
 async function doWork(spaceId: string, currentPageId: string, userId: string, viewId: string, collectionId: string, collectionSchema: any, step: (status: Status) => void) {

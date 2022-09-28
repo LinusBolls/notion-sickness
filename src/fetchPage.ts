@@ -236,9 +236,14 @@ export default async function fetchPage(pageId: unknown) {
         "mode": "cors"
     })
 
+
+    const foo = await res.json()
+
+    // console.log("fetchPage result:", foo)
+
     if (res.status !== 200) console.log("fetchPage failed with status", res.status, res.statusText)
 
-    const data: FetchPageResponse = await res.json()
+    const data: FetchPageResponse = foo
 
     return data
 }

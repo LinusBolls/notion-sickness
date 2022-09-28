@@ -35,3 +35,4 @@ export default async function fetchPageInfo(blockId: string) {
     return data
 }
 
+// value.value.format.page_cover
