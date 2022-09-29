@@ -150,49 +150,49 @@ type PropertyValue = RelationValue | LinkValue | PlainValue
 //       ]
 //     ]
 // ]
-// const isPlainValue = (value: PropertyValue): value is PlainValue => value[0]?.length === 1
-// const isLinkValue = (value: PropertyValue): value is LinkValue => value[1]?.[0] === "a"
-// const isRelationValue = (value: PropertyValue): value is RelationValue => value[1]?.[0] === "p"
+const isPlainValue = (value: PropertyValue): value is PlainValue => value[0]?.length === 1
+const isLinkValue = (value: PropertyValue): value is LinkValue => value[0]?.[1]?.[0]?.[0] === "a"
+const isRelationValue = (value: PropertyValue): value is RelationValue => value[0]?.[1]?.[0]?.[0] === "p"
+// [["Aisling Keane",[["b"],["b"]]]]
+const isBValue = (value: PropertyValue): boolean => value[0]?.[1]?.[0]?.[0] === "b"
 
-// const removeSeperators = (_: unknown, idx: number) => idx % 2 === 1;
+const improvedGetValues = async (value: PropertyValue, type: PropertyType, key: string): Promise<string[]> => {
 
-// const improvedGetValues = async (value: PropertyValue, type: PropertyType, key: string): Promise<string[]> => {
-//         const newValue = (value).filter(removeSeperators)
+    if (isPlainValue(value)) return value[0] as string[]
+    if (isLinkValue(value)) return [value[0][0]]
+    if (isBValue(value)) return [value[0][0]]
 
-//     if (isPlainValue(value)) return newValue[0] as string[]
-//     if (isLinkValue(value)) return [newValue[0][0]]
+    return Promise.all(value.filter(i => i[0] !== ",").map(async i => {
 
-//     return value.map(i => {
+        const [signifier, [[pi, pageId, spaceId]]] = i
 
-//         const [signifier, [[pi, pageId, spaceId]]] = i
+        try {
+            const foreignPage = await loadPage(pageId)
 
-//         try {
-//             const foreignPage = await loadPage(pageId)
+            const collectionId = getDbBlocks(foreignPage)?.[0]?.value?.value?.collection_id
 
-//             const collectionId = getDbBlocks(foreignPage)?.[0]?.value?.value?.collection_id
+            const viewId = Object.keys(foreignPage?.recordMap?.collection_view ?? {})?.[0]
 
-//             const viewId = Object.keys(foreignPage?.recordMap?.collection_view ?? {})?.[0]
+            const wasPageDeleted = collectionId == null || viewId == null
 
-//             const wasPageDeleted = collectionId == null || viewId == null
+            if (wasPageDeleted) return undefined
 
-//             if (wasPageDeleted) return undefined
+            const huch = await loadCollection(collectionId, collectionId, viewId)
 
-//             const huch = await loadCollection(collectionId, viewId)
+            const keyToValue = Object
+                .entries(huch.recordMap.block)
+                .reduce((obj, [key, i]) => ({ ...obj, [key]: i?.value?.properties?.title?.[0]?.[0] }), {})
 
-//             const keyToValue = Object
-//                 .entries(huch.recordMap.block)
-//                 .reduce((obj, [key, i]) => ({ ...obj, [key]: i?.value?.properties?.title?.[0]?.[0] }), {})
+            return keyToValue[pageId]
 
-//             return keyToValue[pageId]
+        } catch (err) {
 
-//         } catch (err) {
+            console.error("uncaught error")
 
-//             console.error("uncaught error")
-
-//             return null
-//         }
-//     })
-// }
+            return null
+        }
+    }))
+}
 
 const getValues = async (value: PropertyValue, type: PropertyType, key: string): Promise<string[]> => {
 
@@ -202,7 +202,7 @@ const getValues = async (value: PropertyValue, type: PropertyType, key: string):
 
         if (i?.length === 1) return i[0]
 
-        const [signifier, [[pi, pageId, spaceId]]] = i
+        const [signifier, [[pOra, pageId, spaceId]]] = i;
 
         if (signifier === ",") return null
 
@@ -234,6 +234,8 @@ const getValues = async (value: PropertyValue, type: PropertyType, key: string):
                 return null
             }
         }
+        if (pOra === "a") return signifier
+
         return null
     }))
     return values.filter((i: (string | undefined)[]) => Array.isArray(i) ? !(i?.every((j: string | undefined) => j === "," || typeof j === "undefined")) : true)
@@ -245,10 +247,15 @@ const toNewEntries = (schema: PageSchema) => async ([key, value]: any): Promise<
 
     const { name, type } = schema[key]
 
-    const values = await getValues(value, type, key)
+    // const values = (await getValues(value, type, key)).filter(i => i != null && i !== ",")
+
+    const values = (await improvedGetValues(value, type, key)).filter(i => i != null)
+
+    // const isEqual = values.every((i, idx) => newValues[idx] === i)
+
+    // if (!isEqual) console.log("not equal:", { values, newValues })
 
     return [name, values]
-
 }
 const toNewPerson = (schema: PageSchema) => async (i: any) => {
 
