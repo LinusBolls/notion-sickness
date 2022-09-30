@@ -6,9 +6,14 @@ export default async function getCoverImgFromPageData(id: string) {
 
     const pageData = await fetchPage(id)
 
-    const pageCovers = Object.values(pageData?.recordMap?.block ?? {}).map(i => i?.value?.value?.format?.page_cover).filter(i => i != null)
+    const rawPage = Object.values(pageData?.recordMap?.block ?? {}).map(i => i?.value?.value).filter(i => i?.format?.page_cover != null)?.[0]
 
-    const validUrl = pageCovers.map(toNotionImgUrl)?.[0]
+    // some pages don't have a block with a page_cover due to being deleted or missing access
+    if (rawPage == null) console.info("raw is null")
 
-    return validUrl
+    const { format, created_time, last_edited_time } = rawPage ?? {}
+
+    const coverImgUrl = rawPage == null ? null : toNotionImgUrl(format?.page_cover)
+
+    return { coverImgUrl, created_time, last_edited_time }
 }

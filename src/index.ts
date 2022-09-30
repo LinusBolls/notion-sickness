@@ -37,13 +37,17 @@ function jsonToXml(obj: any) {
 
 type Status = { status: "not begun" | "working" | "finished" | "terminated", msg: string, data: any, errs: string[] }
 
-function toCsv(data: { [key: string]: any }[], additionalKeys: string[]) {
+function toCsv(data: { props: { [key: string]: any }[] }, additionalKeys: string[]) {
 
-    const keyRow = Object.keys(Object.values(data).reduce((obj, i) => ({ ...obj, ...i })))
+    const flattenedData = data.map(({ props, ...rest }) => ({ ...props, ...rest }))
+
+    const foo = Object.values(flattenedData).reduce((obj, i) => ({ ...obj, ...i }), {})
+
+    const keyRow = Object.keys(foo)
 
     const allKeysRow = [...keyRow, ...additionalKeys]
 
-    const valueRows = Object.values(data).map(i => Array(allKeysRow.length).fill(null).map((_, idx) => i?.[allKeysRow[idx]] ?? null))
+    const valueRows = Object.values(flattenedData).map(i => Array(allKeysRow.length).fill(null).map((_, idx) => i?.[allKeysRow[idx]] ?? null))
 
     return [allKeysRow, ...valueRows]
 }
@@ -53,7 +57,7 @@ type MetaData = [null, { title: [[string]] }, null, null, { title: [[string]] }]
 
 const getCollectionInfo = (collectionData: any) => {
 
-    const props = Object.values(collectionData?.recordMap?.block ?? {}).map(i => ({ props: i?.value?.properties, id: i?.value?.id })) as any[] & MetaData
+    const props = Object.values(collectionData?.recordMap?.block ?? {}).map(i => ({ props: i?.value?.value?.properties, id: i?.value?.value?.id })) as any[] & MetaData
 
     const isEmpty = props.slice(-5).every(i => i.props == null)
 
@@ -261,18 +265,26 @@ const toNewPerson = (schema: PageSchema) => async (i: any) => {
 
     const { props, id } = i;
 
-    const coverImg = await getCoverImgFromPageData(id)
+    const { coverImgUrl, created_time, last_edited_time } = await getCoverImgFromPageData(id)
 
     const newEntryPromises = Object.entries(props ?? {})?.flatMap(toNewEntries(schema))
 
-    const newPerson = Object.fromEntries(await Promise.all(newEntryPromises))
+    const { undefined, ...newProps } = Object.fromEntries(await Promise.all(newEntryPromises))
 
-    return { ...newPerson, "Notion Cover Image Url": coverImg, "Notion Id": id }
+    const metaData = {
+        "Notion Cover Image Url": coverImgUrl,
+        "Notion Id": id,
+        "Notion Created Time": new Date(created_time).toString(),
+        "Notion Last Edited Time": new Date(last_edited_time).toString(),
+    }
+    return { props: newProps, ...metaData }
 }
 
 async function doWork(spaceId: string, currentPageId: string, userId: string, viewId: string, collectionId: string, collectionSchema: any, step: (status: Status) => void) {
 
     this.status = { status: "working", msg: "Fetching Page Info...", data: null, errs: [] }
+
+    // console.log("schema properties:", Object.values(collectionSchema ?? {}))
 
     const rollups = Object.values(collectionSchema ?? {}).filter(i => i.type === "rollup").map(i => i.name + " (NOTION-SICKNESS DOES NOT SUPPORT ROLLUP PROPERTIES YET)")
     const formulas = Object.values(collectionSchema ?? {}).filter(i => i.type === "formula").map(i => i.name + " (NOTION-SICKNESS DOES NOT SUPPORT FORMULA PROPERTIES YET)")
