@@ -284,8 +284,6 @@ async function doWork(spaceId: string, currentPageId: string, userId: string, vi
 
     this.status = { status: "working", msg: "Fetching Page Info...", data: null, errs: [] }
 
-    // console.log("schema properties:", Object.values(collectionSchema ?? {}))
-
     const rollups = Object.values(collectionSchema ?? {}).filter(i => i.type === "rollup").map(i => i.name + " (NOTION-SICKNESS DOES NOT SUPPORT ROLLUP PROPERTIES YET)")
     const formulas = Object.values(collectionSchema ?? {}).filter(i => i.type === "formula").map(i => i.name + " (NOTION-SICKNESS DOES NOT SUPPORT FORMULA PROPERTIES YET)")
 
@@ -299,11 +297,30 @@ async function doWork(spaceId: string, currentPageId: string, userId: string, vi
     }
     step({ status: "working", msg: "Fetching Database Rows...", data: null, errs: [] })
 
-    // can go wrong
-    const data = await fetchCollectionItems(spaceId, collectionId, viewId)
+    let data;
 
-    // can go wrong
-    const { items, collectionTitle, spaceTitle } = getCollectionInfo(data)
+    try {
+        data = await fetchCollectionItems(spaceId, collectionId, viewId)
+
+    } catch (err) {
+
+        step({ status: "terminated", msg: "Error Fetching Rows", data: null, errs: [] })
+
+        return
+    }
+
+    let collectionInfo: any;
+
+    try {
+        collectionInfo = getCollectionInfo(data)
+
+    } catch (err) {
+
+        step({ status: "terminated", msg: "Error Getting Collection", data: null, errs: [] })
+
+        return
+    }
+    const { items, collectionTitle, spaceTitle } = collectionInfo
 
     step({ status: "working", msg: `Processing ${items.length} Rows...`, data: null, errs: [] })
 
