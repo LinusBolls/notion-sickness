@@ -6,6 +6,34 @@ import fetchPage, { PageSchema, PropertyType } from "./fetchPage"
 import fetchCollectionItems from "./fetchCollectionItems"
 import openExportPopup from "./openExportPopup"
 import getCoverImgFromPageData from "./getCoverImgFromPageData"
+import JSZip from "jszip"
+
+// async function getAssetZip(items: any[]) {
+
+//     const assetZip = new JSZip();
+
+//     for (const item of items) {
+
+//         const imgUrl = item["Notion Cover Image Url"]
+
+//         const imgDataUrl = sessionStorage.getItem(`[asset][${imgUrl}]`)
+
+//         if (imgDataUrl == null) continue;
+
+//         const extension = getExtensionFromDataUrl(imgDataUrl)
+
+//         assetZip.file(`${imgUrl}.${extension}`, imgDataUrl)
+//     }
+//     return new Promise(res => {
+//         assetZip.generateAsync({ type: 'blob' }).then(data => {
+
+//             console.log("finished generating assetZip")
+
+//             res(data)
+//             // FileSaver.saveAs(data, 'download.zip');
+//         });
+//     })
+// }
 
 // src: https://stackoverflow.com/a/48789311
 function jsonToXml(obj: any) {
@@ -33,7 +61,7 @@ function jsonToXml(obj: any) {
     return xml
 }
 
-
+const getExtensionFromDataUrl = (dataUrl: string) => (dataUrl.substring(dataUrl.indexOf(":") + 1, dataUrl.indexOf(";"))).split("/")[1]
 
 type Status = { status: "not begun" | "working" | "finished" | "terminated", msg: string, data: any, errs: string[] }
 
@@ -352,6 +380,8 @@ async function doWork(spaceId: string, currentPageId: string, userId: string, vi
     const jsonDataUrl = "data:application/json;base64," + btoa(removeNonUtf8Chars(jsonStr))
 
     const xmlDataUrl = "data:application/xml;base64," + btoa(removeNonUtf8Chars(xmlStr))
+
+    // const assetZip = await getAssetZip(refinedItems);
 
     const fileName = spaceTitle + "-" + collectionTitle + "-db";
 

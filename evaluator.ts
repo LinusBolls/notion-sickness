@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises"
 
-const FILE_PATH = "/users/linusbolls/downloads/Knowledge Space-People-db.json"
+const FILE_PATH = "/Users/linusbolls/downloads/Knowledge Space-People-db.json"
 
 const Gen = {
     1: "#firstclass",

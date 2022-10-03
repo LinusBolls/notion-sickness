@@ -19,7 +19,7 @@
     "strict": false,
     "strictMode": true,
     "lazy": false,
-    "noInterop": true
+    "noInterop": false
   },
   "sourceMaps": "inline",
   "minify": true,
@@ -31,6 +31,3 @@
     "coreJs": "3.22"
   }
 }
-
-    // You can specify "commonjs", "es6", "amd", "umd"
-
