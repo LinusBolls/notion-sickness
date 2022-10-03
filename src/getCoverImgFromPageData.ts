@@ -1,3 +1,4 @@
+import axios from "axios";
 import fetchPage from "./fetchPage"
 
 const toNotionImgUrl = (url: string) => "https://www.notion.so/image/" + encodeURIComponent(url) + "?table=block&id=d0262c3e-374a-4dbf-ab2a-a318d1870e18&spaceId=7cf1b6cc-df88-4bf5-afc7-bf5416fda723&width=380&userId=2a6a02e4-98af-496f-8e2d-f72c6648b503&cache=v2"
@@ -24,25 +25,30 @@ export default async function getCoverImgFromPageData(id: string) {
 
     const { format, created_time, last_edited_time } = rawPage ?? {}
 
-    const coverImgUrl = rawPage == null ? null : toNotionImgUrl(format?.page_cover)
+    const coverImgUrl = rawPage == null ? null : toNotionImgUrl(format?.page_cover as string)
 
     if (coverImgUrl != null && !sessionStorage.getItem(`[asset][${coverImgUrl}]`)) {
 
-        const res = await fetch(coverImgUrl)
+        // try {
 
-        if (res.ok) {
+        //     const res = await axios.create({ timeout: 10000 }).get(coverImgUrl)
 
-            const data = await res.blob()
+        //     const data: Blob = res.data
 
-            const mimeType = data.type
+        //     if (!(data instanceof Blob)) throw new Error("not a blob")
 
-            const extension = mimeType.split("/")[1]
+        //     const mimeType = data.type
 
-            const dataUrl = await blobToDataURL(data)
+        //     const extension = mimeType.split("/")[1]
 
-            sessionStorage.setItem(`[asset][${coverImgUrl}]`, dataUrl);
+        //     const dataUrl = await blobToDataURL(data)
 
-        }
+        //     sessionStorage.setItem(`[asset][${coverImgUrl}]`, dataUrl);
+
+        // } catch (err) {
+
+        //     console.log("failed to fetch")
+        // }
     }
     return { coverImgUrl, created_time, last_edited_time }
 }

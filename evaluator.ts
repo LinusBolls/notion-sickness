@@ -25,7 +25,7 @@ async function main() {
 
     const people = JSON.parse(await readFile(FILE_PATH, { encoding: "utf-8" }))
 
-    const students = people.filter(byStatus("Active student"))
+    const students: any[] = people.filter(byStatus("Active student"))
 
     const fifth = students.filter(byGen(Gen[5]))
 

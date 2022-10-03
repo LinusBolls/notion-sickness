@@ -8,32 +8,34 @@ import openExportPopup from "./openExportPopup"
 import getCoverImgFromPageData from "./getCoverImgFromPageData"
 import JSZip from "jszip"
 
-// async function getAssetZip(items: any[]) {
+async function getAssetZip(items: any[]): Promise<Blob> {
 
-//     const assetZip = new JSZip();
+    const assetZip = new JSZip();
 
-//     for (const item of items) {
+    for (const [key, item] of Object.entries(items)) {
 
-//         const imgUrl = item["Notion Cover Image Url"]
+        const imgUrl = item["Notion Cover Image Url"]
 
-//         const imgDataUrl = sessionStorage.getItem(`[asset][${imgUrl}]`)
+        const id = item["Notion Id"]
 
-//         if (imgDataUrl == null) continue;
+        const imgDataUrl = sessionStorage.getItem(`[asset][${imgUrl}]`)
 
-//         const extension = getExtensionFromDataUrl(imgDataUrl)
+        if (imgDataUrl == null) continue;
 
-//         assetZip.file(`${imgUrl}.${extension}`, imgDataUrl)
-//     }
-//     return new Promise(res => {
-//         assetZip.generateAsync({ type: 'blob' }).then(data => {
+        const extension = getExtensionFromDataUrl(imgDataUrl)
 
-//             console.log("finished generating assetZip")
+        const idx = imgDataUrl.indexOf("base64,") + "base64,".length;
 
-//             res(data)
-//             // FileSaver.saveAs(data, 'download.zip');
-//         });
-//     })
-// }
+        const filename = `${id}-cover.${extension}`
+
+        const content = imgDataUrl.substring(idx);
+
+        assetZip.file(filename, content, { base64: true });
+    }
+    return new Promise(res => {
+        assetZip.generateAsync({ type: "blob" }).then(res);
+    })
+}
 
 // src: https://stackoverflow.com/a/48789311
 function jsonToXml(obj: any) {
@@ -65,17 +67,17 @@ const getExtensionFromDataUrl = (dataUrl: string) => (dataUrl.substring(dataUrl.
 
 type Status = { status: "not begun" | "working" | "finished" | "terminated", msg: string, data: any, errs: string[] }
 
-function toCsv(data: { props: { [key: string]: any }[] }, additionalKeys: string[]) {
+function toCsv(data: any[], additionalKeys: string[]) {
 
     const flattenedData = data.map(({ props, ...rest }) => ({ ...props, ...rest }))
 
-    const foo = Object.values(flattenedData).reduce((obj, i) => ({ ...obj, ...i }), {})
+    const foo = Object.values(flattenedData).reduce((obj, i) => ({ ...obj as any, ...i as any }), {})
 
     const keyRow = Object.keys(foo)
 
     const allKeysRow = [...keyRow, ...additionalKeys]
 
-    const valueRows = Object.values(flattenedData).map(i => Array(allKeysRow.length).fill(null).map((_, idx) => i?.[allKeysRow[idx]] ?? null))
+    const valueRows = Object.values(flattenedData).map(i => Array(allKeysRow.length).fill(null).map((_, idx) => i?.[allKeysRow[idx] as string] ?? null))
 
     return [allKeysRow, ...valueRows]
 }
@@ -85,13 +87,13 @@ type MetaData = [null, { title: [[string]] }, null, null, { title: [[string]] }]
 
 const getCollectionInfo = (collectionData: any) => {
 
-    const props = Object.values(collectionData?.recordMap?.block ?? {}).map(i => ({ props: i?.value?.value?.properties, id: i?.value?.value?.id })) as any[] & MetaData
+    const props = Object.values(collectionData?.recordMap?.block ?? {}).map((i: any) => ({ props: i?.value?.value?.properties, id: i?.value?.value?.id })) as any[] & MetaData
 
     const isEmpty = props.slice(-5).every(i => i.props == null)
 
     if (isEmpty) console.error("collection is empty")
 
-    const [, { title: [[collectionTitle]] }, , , { title: [[spaceTitle]] }] = props.map(i => i.props).slice(-5) as any as MetaData
+    const [, { title: [[collectionTitle]] }, , , { title: [[spaceTitle]] }] = props.map((i: any) => i.props).slice(-5) as any as MetaData
 
     const items = props.slice(0, -5)
 
@@ -99,7 +101,7 @@ const getCollectionInfo = (collectionData: any) => {
 }
 const getDbBlocks = (dings: any) => {
 
-    const huch = Object.values(dings?.recordMap?.block ?? {})?.filter(i => typeof i?.value?.value?.collection_id === "string")
+    const huch = Object.values(dings?.recordMap?.block ?? {})?.filter((i: any) => typeof i?.value?.value?.collection_id === "string")
 
     return huch
 }
@@ -188,19 +190,23 @@ const isRelationValue = (value: PropertyValue): value is RelationValue => value[
 // [["Aisling Keane",[["b"],["b"]]]]
 const isBValue = (value: PropertyValue): boolean => value[0]?.[1]?.[0]?.[0] === "b"
 
-const improvedGetValues = async (value: PropertyValue, type: PropertyType, key: string): Promise<string[]> => {
+const getValues = async (value: PropertyValue, type: PropertyType, key: string): Promise<string[]> => {
 
     if (isPlainValue(value)) return value[0] as string[]
+    // @ts-ignore
     if (isLinkValue(value)) return [value[0][0]]
+    // @ts-ignore
     if (isBValue(value)) return [value[0][0]]
 
     return Promise.all(value.filter(i => i[0] !== ",").map(async i => {
 
+        // @ts-ignore
         const [signifier, [[pi, pageId, spaceId]]] = i
 
         try {
             const foreignPage = await loadPage(pageId)
 
+            // @ts-ignore
             const collectionId = getDbBlocks(foreignPage)?.[0]?.value?.value?.collection_id
 
             const viewId = Object.keys(foreignPage?.recordMap?.collection_view ?? {})?.[0]
@@ -213,8 +219,9 @@ const improvedGetValues = async (value: PropertyValue, type: PropertyType, key: 
 
             const keyToValue = Object
                 .entries(huch.recordMap.block)
-                .reduce((obj, [key, i]) => ({ ...obj, [key]: i?.value?.properties?.title?.[0]?.[0] }), {})
+                .reduce((obj, [key, i]: any) => ({ ...obj, [key]: i?.value?.properties?.title?.[0]?.[0] }), {})
 
+            // @ts-ignore
             return keyToValue[pageId]
 
         } catch (err) {
@@ -226,62 +233,16 @@ const improvedGetValues = async (value: PropertyValue, type: PropertyType, key: 
     }))
 }
 
-const getValues = async (value: PropertyValue, type: PropertyType, key: string): Promise<string[]> => {
-
-    const values = await Promise.all(value.map(async (i: any) => {
-
-        if (!Array.isArray(i)) return i
-
-        if (i?.length === 1) return i[0]
-
-        const [signifier, [[pOra, pageId, spaceId]]] = i;
-
-        if (signifier === ",") return null
-
-        if (signifier === "‣") {
-
-            try {
-                const foreignPage = await loadPage(pageId)
-
-                const collectionId = getDbBlocks(foreignPage)?.[0]?.value?.value?.collection_id
-
-                const viewId = Object.keys(foreignPage?.recordMap?.collection_view ?? {})?.[0]
-
-                const wasPageDeleted = collectionId == null || viewId == null
-
-                if (wasPageDeleted) return undefined
-
-                const huch = await loadCollection(spaceId, collectionId, viewId)
-
-                const keyToValue = Object
-                    .entries(huch.recordMap.block)
-                    .reduce((obj, [key, i]) => ({ ...obj, [key]: i?.value?.properties?.title?.[0]?.[0] }), {})
-
-                return keyToValue[pageId]
-
-            } catch (err) {
-
-                console.error("uncaught error inside getValues()")
-
-                return null
-            }
-        }
-        if (pOra === "a") return signifier
-
-        return null
-    }))
-    return values.filter((i: (string | undefined)[]) => Array.isArray(i) ? !(i?.every((j: string | undefined) => j === "," || typeof j === "undefined")) : true)
-}
-
 const toNewEntries = (schema: PageSchema) => async ([key, value]: any): Promise<[string, string[]][]> => {
 
     if (!(key in schema)) return []
 
+    // @ts-ignore
     const { name, type } = schema[key]
 
     // const values = (await getValues(value, type, key)).filter(i => i != null && i !== ",")
 
-    const values = (await improvedGetValues(value, type, key)).filter(i => i != null)
+    const values = (await getValues(value, type, key)).filter(i => i != null)
 
     // const isEqual = values.every((i, idx) => newValues[idx] === i)
 
@@ -302,7 +263,9 @@ const toNewPerson = (schema: PageSchema) => async (i: any) => {
     const metaData = {
         "Notion Cover Image Url": coverImgUrl,
         "Notion Id": id,
+        // @ts-ignore
         "Notion Created Time": new Date(created_time).toString(),
+        // @ts-ignore
         "Notion Last Edited Time": new Date(last_edited_time).toString(),
     }
     return { props: newProps, ...metaData }
@@ -310,9 +273,12 @@ const toNewPerson = (schema: PageSchema) => async (i: any) => {
 
 async function doWork(spaceId: string, currentPageId: string, userId: string, viewId: string, collectionId: string, collectionSchema: any, step: (status: Status) => void) {
 
+    // @ts-ignore
     this.status = { status: "working", msg: "Fetching Page Info...", data: null, errs: [] }
 
+    // @ts-ignore
     const rollups = Object.values(collectionSchema ?? {}).filter(i => i.type === "rollup").map(i => i.name + " (NOTION-SICKNESS DOES NOT SUPPORT ROLLUP PROPERTIES YET)")
+    // @ts-ignore
     const formulas = Object.values(collectionSchema ?? {}).filter(i => i.type === "formula").map(i => i.name + " (NOTION-SICKNESS DOES NOT SUPPORT FORMULA PROPERTIES YET)")
 
     const unimplementedKeys = [...rollups, ...formulas]
@@ -357,11 +323,7 @@ async function doWork(spaceId: string, currentPageId: string, userId: string, vi
     // can go wrong
     const refinedItems = await Promise.all(dings)
 
-    step({ status: "working", msg: `Preparing Transform to CSV...`, data: null, errs: [] })
-
     const csvArr = toCsv(refinedItems, unimplementedKeys)
-
-    step({ status: "working", msg: `Creating CSV File...`, data: null, errs: [] })
 
     const csvStr = Papa.unparse(csvArr)
 
@@ -381,16 +343,27 @@ async function doWork(spaceId: string, currentPageId: string, userId: string, vi
 
     const xmlDataUrl = "data:application/xml;base64," + btoa(removeNonUtf8Chars(xmlStr))
 
-    // const assetZip = await getAssetZip(refinedItems);
+    const assetZip = await getAssetZip(refinedItems);
 
+    const assetZipUrl = await new Promise<string>(res => {
+        const reader = new FileReader();
+
+        reader.addEventListener("load", () => {
+
+            res(reader.result as string)
+
+        }, false);
+
+        reader.readAsDataURL(assetZip);
+    })
     const fileName = spaceTitle + "-" + collectionTitle + "-db";
 
+    // @ts-ignore
     this.status = { status: "finished", msg: `Ready to Download`, data: {}, errs: [] }
 
     step({
         status: "finished", msg: `Ready to Download`, data: {
             collectionTitle, files: {
-
                 csv: {
                     name: fileName + ".csv",
                     url: csvDataUrl,
@@ -403,6 +376,10 @@ async function doWork(spaceId: string, currentPageId: string, userId: string, vi
                     name: fileName + ".json",
                     url: jsonDataUrl,
                 },
+                assetZip: {
+                    name: fileName + "-assets.zip",
+                    url: assetZipUrl
+                }
             }
         }, errs: []
     })
@@ -499,7 +476,7 @@ class AppStateController {
 
     status: Status = { status: "not begun", msg: "Fetching Page Info...", data: null, errs: [] };
 
-    async mountControls() {
+    async mountControls(this: AppStateController) {
 
         const css = `.linus-focusable:hover{ background-color: rgba(55, 53, 47, 0.08); }`;
         const style = document.createElement("style");
@@ -539,7 +516,8 @@ class AppStateController {
 
             (document.querySelector(Selector.ICON) as HTMLElement).innerHTML = Icon.WORKING
 
-            doWork.call(this, spaceId, pageId, userId, viewId, collectionId, collectionSchema, updateStatus);
+            // @ts-ignore
+            doWork.call(this, spaceId as string, pageId as string, userId, viewId, collectionId, collectionSchema, updateStatus);
         }).bind(this)
     }
 

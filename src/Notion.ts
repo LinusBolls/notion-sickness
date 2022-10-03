@@ -3,7 +3,7 @@ import getNotionHttpConfig from "./getNotionHttpConfig";
 import fetchPage from "./fetchPage";
 import fetchCollectionItems from "./fetchCollectionItems";
 import fetchSpaceInfo from "./fetchSpaceInfo";
-import fetchSpaces from "./fetchSpaces";
+import fetchSpaces, { SpaceViewPointer } from "./fetchSpaces";
 import fetchUserInfo from "./fetchUserInfo";
 
 // 04418b8e32c44266a9bbd76acabbc092 => 04418b8e-32c4-4266-a9bb-d76acabbc092
@@ -16,8 +16,6 @@ async function getCurrentSpace() {
 
     const spaces = await fetchSpaces()
 
-    
-
     const { user_id: userId } = await fetchUserInfo()
 
     const spaceAndViewIds = Object.values(Object.values(spaces ?? {})?.[0]?.user_root ?? {})?.[0]?.value?.value?.space_view_pointers as SpaceViewPointer[]
@@ -28,7 +26,7 @@ async function getCurrentSpace() {
 
     const currentSpace = combined.filter(i => currentSpaceDomain === i.domain)?.[0]
 
-    return { currentSpace, currentPageId: insertDashesIntoUuid(currentPageId), userId }
+    return { currentSpace, currentPageId: insertDashesIntoUuid(currentPageId as string), userId }
 }
 
 export default class Notion {

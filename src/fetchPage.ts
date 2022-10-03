@@ -115,6 +115,7 @@ export interface FetchPageResponse {
                         properties?: { [key: string]: string[][] } // page has this
                         content?: Id[] // page has this
                         format: {
+                            page_cover?: string
                             column_ratio?: number
                             page_icon: string, // emoji or image url
                             block_color: string, // background_yellow or image url
@@ -157,6 +158,8 @@ export interface FetchPageResponse {
 
                 value: {
                     value: {
+                        id: string
+
                         schema: PageSchema
                         icon: string
                         format: {
@@ -176,6 +179,15 @@ export interface FetchPageResponse {
                         alive: boolean
                         // bunch of other stuff
                         space_id: string
+                    }
+                }
+            }
+        }
+        collection_view: {
+            [key: string]: {
+                value: {
+                    value: {
+                        id: string
                     }
                 }
             }

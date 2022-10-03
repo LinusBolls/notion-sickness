@@ -2,7 +2,7 @@ const closeOnclick = `onclick='document.querySelector(".notion-overlay-container
 
 export default function openExportPopup(data: any) {
 
-    const { collectionTitle, files: { csv, xml, json } } = data;
+    const { collectionTitle, files: { csv, xml, json, assetZip } } = data;
 
     (document.querySelector(".notion-overlay-container.notion-default-overlay-container") as HTMLElement).innerHTML =
         `<head>
@@ -125,6 +125,35 @@ export default function openExportPopup(data: any) {
                             <div style="min-width: 0px; width: 100%;">
                                 <div style="display: flex;">
                                     <div style="font-size: 16px; font-weight: 500;">JSON</div>
+                                    <div style="margin-left: auto;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        </a>
+                        <a href="${assetZip.url}" download="${assetZip.name}" style="color: rgb(55, 53, 47); text-decoration: none">
+                        <div style="user-select: none; transition: background 200ms ease-out 0s; cursor: pointer; display: flex; align-items: center; padding: 10px 8px 10px 10px; border-radius: 3px; margin-bottom: 12px; box-shadow: rgba(15, 15, 15, 0.1) 0px 0px 0px 1px, rgba(15, 15, 15, 0.1) 0px 2px 4px; background: white none repeat scroll 0% 0%;"
+                            class="notion-focusable" role="button" tabindex="0">
+                            <div
+                                style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 3px; margin-right: 8px; color: rgba(55, 53, 47, 0.65); background: rgb(251, 251, 250) none repeat scroll 0% 0%;">
+                                
+                    
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="11" viewBox="-25 -40 200 200"
+                                    style="width: 28px; height: 28px; display: block; fill: inherit; flex-shrink: 0; backface-visibility: hidden;"
+                                    class="importText">
+                                    <path d="M143.209,105.968c0,6.25-5.113,11.364-11.363,11.364H18.203c-6.25
+                                    0-11.363-5.113-11.363-11.364v-86.37c0-6.25,5.113-11.363
+                                    11.363-11.363h113.643c6.25,0,11.363,5.113,11.363,11.363V105.968z
+                                    M18.203,17.326c-1.207,0-2.271,1.068-2.271,2.271v86.37c0,1.207,1.065
+                                    2.271,2.271,2.271h113.643c1.203,0,2.274-1.064
+                                    2.274-2.271v-86.37c0-1.203-1.071-2.271-2.274-2.271H18.203z
+                                    M38.661,53.691c-7.529,0-13.641-6.108-13.641-13.635s6.112-13.638,13.641-13.638
+                                    c7.526,0,13.632,6.111,13.632,13.638S46.188,53.691,38.661,53.691z
+                                    M125.025,99.15H25.02V85.51l22.73-22.724l11.363,11.36l36.365-36.361l29.547,29.547V99.15z"/>
+                                    </svg>
+                                </div>
+                            <div style="min-width: 0px; width: 100%;">
+                                <div style="display: flex;">
+                                    <div style="font-size: 16px; font-weight: 500;">IMAGES</div>
                                     <div style="margin-left: auto;"></div>
                                 </div>
                             </div>

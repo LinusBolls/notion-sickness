@@ -1,3 +1,25 @@
+export interface SpaceViewPointer {
+    id: string
+    spaceId: string
+}
+export interface FetchSpacesResponse {
+
+    [key: string]: {
+
+        user_root: {
+
+            [key: string]: {
+
+                value: {
+                    value: {
+                        space_view_pointers: SpaceViewPointer[]
+                    }
+                }
+            }
+        }
+    }
+}
+
 export default async function fetchSpaces() {
 
     const body = {}
@@ -19,7 +41,7 @@ export default async function fetchSpaces() {
         "method": "POST",
         "mode": "cors"
     });
-    const data = await res.json()
+    const data: FetchSpacesResponse = await res.json()
 
     return data
 }
