@@ -1,10 +1,10 @@
-import getNotionHttpConfig from "./getNotionHttpConfig";
+import getNotionHttpConfig from "./util/getNotionHttpConfig";
 
-import fetchPage from "./fetchPage";
-import fetchCollectionItems from "./fetchCollectionItems";
-import fetchSpaceInfo from "./fetchSpaceInfo";
-import fetchSpaces, { SpaceViewPointer } from "./fetchSpaces";
-import fetchUserInfo from "./fetchUserInfo";
+import fetchPage from "./notionRequests/fetchPage";
+import fetchCollectionItems from "./notionRequests/fetchCollectionItems";
+import fetchSpaceInfo from "./notionRequests/fetchSpaceInfo";
+import fetchSpaces, { SpaceViewPointer } from "./notionRequests/fetchSpaces";
+import fetchUserInfo from "./notionRequests/fetchUserInfo";
 
 // 04418b8e32c44266a9bbd76acabbc092 => 04418b8e-32c4-4266-a9bb-d76acabbc092
 const insertDashesIntoUuid = (uuid: string) => `${uuid.slice(0, 8)}-${uuid.slice(8, 12)}-${uuid.slice(12, 16)}-${uuid.slice(16, 20)}-${uuid.slice(20)}`

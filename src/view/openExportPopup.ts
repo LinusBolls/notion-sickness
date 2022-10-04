@@ -1,6 +1,8 @@
+import { DownloadProcessResult } from "../downloadProcess/startDownloadProcess";
+
 const closeOnclick = `onclick='document.querySelector(".notion-overlay-container.notion-default-overlay-container").innerHTML = ""'`
 
-export default function openExportPopup(data: any) {
+export default function openExportPopup(data: DownloadProcessResult) {
 
     const { collectionTitle, files: { csv, xml, json, assetZip } } = data;
 
