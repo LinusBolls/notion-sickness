@@ -253,7 +253,7 @@ export default async function fetchPage(pageId: unknown) {
 
     // console.log("fetchPage result:", foo)
 
-    if (res.status !== 200) console.log("fetchPage failed with status", res.status, res.statusText)
+    if (res.status !== 200) console.log("failed to fetch page:", res.status, res.statusText)
 
     const data: FetchPageResponse = foo
 

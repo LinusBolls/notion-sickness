@@ -1,16 +1,26 @@
 import Papa from "papaparse"
 import { BehaviorSubject } from "rxjs";
 import { json2xml } from "xml-js";
-import assetStorage from "../assetStorage.service";
+import assetStorage, { getAssetZips } from "../assetStorage.service";
 
 import fetchCollectionItems from "../notionRequests/fetchCollectionItems";
 import getCollectionInfo from "../util/getCollectionInfo";
 import prepareJsonForCsvUnparse from "../util/prepareJsonForCsvUnparse";
+import toDataUrl from "../util/toDataUrl";
 import toRefinedItem from "./toRefinedItem";
+
+function saveContent(dataUrl: string, fileName: string) {
+    const link = document.createElement("a");
+
+    link.download = fileName;
+    link.href = dataUrl
+    link.click();
+}
 
 interface FinishedFile {
     name: string
-    url: string;
+    url?: string;
+    func?: () => void
 }
 
 export interface DownloadProcessResult {
@@ -92,10 +102,20 @@ const startDownloadProcess = (spaceId: string, currentPageId: string, userId: st
         }
         const { items, collectionTitle, spaceTitle } = collectionInfo
 
-        sub.next({ status: "working", msg: `Processing ${items.length} Rows...`, data: null, errs: [] })
+        let finishedCount = 0;
+
+        sub.next({ status: "working", msg: `Finished ${finishedCount} / ${items.length} Rows...`, data: null, errs: [] })
+
+        const onFinished = (item: any) => {
+            finishedCount++;
+
+            sub.next({ status: "working", msg: `Finished ${finishedCount} / ${items.length} Rows...`, data: null, errs: [] })
+
+            return item
+        }
 
         // can go wrong
-        const refinedItems = await Promise.all(items.map(toRefinedItem(collectionSchema)))
+        const refinedItems = await Promise.all(items.map((i: any) => toRefinedItem(collectionSchema)(i).then(onFinished)))
 
         const csvArr = prepareJsonForCsvUnparse(refinedItems, unimplementedKeys)
 
@@ -115,20 +135,19 @@ const startDownloadProcess = (spaceId: string, currentPageId: string, userId: st
 
         const xmlDataUrl = "data:application/xml;base64," + btoa(removeNonUtf8Chars(xmlStr))
 
-        const assetZip = await assetStorage().getAssetZip(refinedItems);
+        // const assetZip = await assetStorage().getAssetZip(refinedItems);
 
-        const assetZipUrl = await new Promise<string>(res => {
-            const reader = new FileReader();
+        // const assetZipSize = (assetZipUrl.length / 1000 / 1000).toFixed(1);
 
-            reader.addEventListener("load", () => {
+        // console.log(`asset zip is ${assetZipSize}mb`)
 
-                res(reader.result as string)
+        // const assetZipUrl = await toDataUrl(assetZip)
 
-            }, false);
+        const assetZips = await Promise.all((await getAssetZips(refinedItems, 10)).map(toDataUrl))
 
-            reader.readAsDataURL(assetZip);
-        })
         const fileName = spaceTitle + "-" + collectionTitle + "-db";
+
+        const saveAssets = () => assetZips.map((i, idx) => saveContent(i, fileName + "-assets-" + idx + ".zip"))
 
         sub.next({
             status: "finished", msg: `Ready to Download`, data: {
@@ -148,7 +167,8 @@ const startDownloadProcess = (spaceId: string, currentPageId: string, userId: st
                     },
                     assetZip: {
                         name: fileName + "-assets.zip",
-                        url: assetZipUrl
+                        url: "",
+                        func: saveAssets,
                     }
                 }
             }, errs: []

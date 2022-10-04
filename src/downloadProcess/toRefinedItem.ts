@@ -2,7 +2,9 @@ import fetchCollectionItems from "../notionRequests/fetchCollectionItems";
 import fetchPage, { PageSchema, PropertyType } from "../notionRequests/fetchPage";
 import getCollectionInfo from "../util/getCollectionInfo";
 import { getPageInfo } from "../util/getCurrentPageInfo";
-import getCoverImgFromPageData from "./getCoverImgFromPageData";
+import storeCoverImage from "./storeCoverImage";
+
+const toNotionImgUrl = (url: string) => "https://www.notion.so/image/" + encodeURIComponent(url) + "?table=block&id=d0262c3e-374a-4dbf-ab2a-a318d1870e18&spaceId=7cf1b6cc-df88-4bf5-afc7-bf5416fda723&width=380&userId=2a6a02e4-98af-496f-8e2d-f72c6648b503&cache=v2"
 
 const pageCache: { [key: string]: any } = {}
 
@@ -43,21 +45,21 @@ type PropertyValue = RelationValue | LinkValue | PlainValue
 
 const toRefinedItem = (schema: PageSchema) => async (i: any) => {
 
-    const { props, id } = i;
+    const { props, id, format, createdTime, lastEditedTime } = i;
 
-    const { coverImgUrl, created_time, last_edited_time } = await getCoverImgFromPageData(id)
+    const coverImgUrl = toNotionImgUrl(format?.page_cover)
+
+    storeCoverImage(coverImgUrl)
 
     const newEntryPromises = Object.entries(props ?? {})?.flatMap(toNewEntries(schema))
 
     const { undefined, ...newProps } = Object.fromEntries(await Promise.all(newEntryPromises))
 
     const metaData = {
-        "Notion Cover Image Url": coverImgUrl,
         "Notion Id": id,
-        // @ts-ignore
-        "Notion Created Time": new Date(created_time).toString(),
-        // @ts-ignore
-        "Notion Last Edited Time": new Date(last_edited_time).toString(),
+        "Notion Cover Image Url": coverImgUrl,
+        "Notion Created Time": new Date(createdTime).toString(),
+        "Notion Last Edited Time": new Date(lastEditedTime).toString(),
     }
     return { props: newProps, ...metaData }
 }
@@ -109,7 +111,7 @@ const getValues = async (value: PropertyValue, type: PropertyType, key: string, 
 
         } catch (err) {
 
-            console.error("error inside getValues:", err)
+            console.log("failed to get values:", err)
 
             return null
         }
