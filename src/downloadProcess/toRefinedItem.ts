@@ -130,7 +130,7 @@ const getValues = async (value: PropertyValue, type: PropertyType, key: string, 
 
         } catch (err) {
 
-            console.error("error inside getValues")
+            console.error("error inside getValues:", err)
 
             return null
         }

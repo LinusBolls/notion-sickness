@@ -35,6 +35,8 @@ export default class AppStateController {
 
     downloadProcess: BehaviorSubject<DownloadProcessState>
 
+    constructor() { }
+
     async mountControls() {
 
         const css = `.linus-focusable:hover{ background-color: rgba(55, 53, 47, 0.08); }`;
