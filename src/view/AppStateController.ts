@@ -1,9 +1,10 @@
 import { BehaviorSubject } from "rxjs"
 
 import { Icon, Selector, Text } from "../config.data"
-import getCurrentPageInfo from "../util/getCurrentPageInfo"
+import { getCurrentPageId, getPageInfo } from "../util/getCurrentPageInfo"
 import openExportPopup from "./openExportPopup"
 import startDownloadProcess, { DownloadProcessState } from "../downloadProcess/startDownloadProcess"
+import fetchPage from "../notionRequests/fetchPage"
 
 function updateStatus(state: DownloadProcessState) {
 
@@ -64,12 +65,20 @@ export default class AppStateController {
                 </div>
             </div>`
         );
-        const { userId, pageId, spaceId, viewId, collectionId, hasCollection, collectionSchema } = await getCurrentPageInfo();
+        const currentPageId = getCurrentPageId()
+
+        if (currentPageId == null) return;
+
+        const currentPage = await fetchPage(currentPageId);
+
+        const userId = "";
+
+        const { spaceId, viewId, collectionId, hasCollection, collectionSchema } = getPageInfo(currentPage);
 
         (document.querySelector(Selector.ICON) as HTMLElement).innerHTML = hasCollection ? Icon.DEFAULT : Icon.NOT_AVAILABLE;
         (document.querySelector(Selector.CONTROLS) as HTMLElement).innerHTML = hasCollection ? Text.DEFAULT : Text.CANNOT_EXPORT
 
-        if (!hasCollection) return
+        if (!hasCollection) return;
 
         (document.querySelector(Selector.CONTROLS) as HTMLElement).onclick = (function (this: AppStateController) {
 
@@ -77,7 +86,7 @@ export default class AppStateController {
 
             (document.querySelector(Selector.ICON) as HTMLElement).innerHTML = Icon.WORKING
 
-            this.downloadProcess = startDownloadProcess(spaceId as string, pageId as string, userId, viewId as string, collectionId as string, collectionSchema)
+            this.downloadProcess = startDownloadProcess(spaceId, currentPageId, userId, viewId, collectionId, collectionSchema)
 
             this.downloadProcess.subscribe({ next: updateStatus })
         }).bind(this)

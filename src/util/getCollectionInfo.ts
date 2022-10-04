@@ -1,17 +1,46 @@
-export type MetaData = [null, { title: [[string]] }, null, null, { title: [[string]] }]
+import getBlockValue from "./getBlockValue"
+
+interface Foo {
+  props: {
+    title: [[string]]
+  }
+  id: string
+}
+interface Bar {
+  props: undefined
+  id: string
+}
+
+type SameSpaceMeta = [Bar, Foo, Bar, Bar, Foo]
+
+type ForeignSpaceMeta = [Foo, Bar, Foo, Bar, Foo]
+
+export type MetaData = SameSpaceMeta | ForeignSpaceMeta
+
 
 const getCollectionInfo = (collectionData: any) => {
 
-    const props = Object.values(collectionData?.recordMap?.block ?? {}).map((i: any) => ({ props: i?.value?.properties, id: i?.value?.id })) as any[] & MetaData
+  try {
 
-    const isEmpty = props.slice(-5).every((i: any) => i.props == null)
+    const block = collectionData?.recordMap?.block ?? {}
 
-    if (isEmpty) console.error("collection is empty")
+    const props = Object
+      .values(block)
+      .map((i: any) => ({ props: getBlockValue(i, "properties"), id: getBlockValue(i, "id") }))
 
-    const [, { title: [[collectionTitle]] }, , , { title: [[spaceTitle]] }] = props.map((i: any) => i.props).slice(-5) as any as MetaData
+    const metadata = props.slice(-5) as MetaData
+    const items = props.slice(0, -5) as any[]
 
-    const items = props.slice(0, -5)
+    const foo = metadata.map(i => i.props?.title?.[0]?.[0])
 
-    return { items, collectionTitle, spaceTitle }
+    const [smth, collectionTitle, smthElse, alwaysEmpty, spaceTitle] = foo
+
+    const foreignKeyToTitle = Object
+      .entries(block)
+      .reduce((obj, [key, i]: any) => ({ ...obj, [key]: getBlockValue(i, "properties")?.title?.[0]?.[0] }), {})
+
+    return { items, collectionTitle, spaceTitle, foreignKeyToTitle }
+
+  } catch (err) { console.debug(err); return {} as any }
 }
 export default getCollectionInfo

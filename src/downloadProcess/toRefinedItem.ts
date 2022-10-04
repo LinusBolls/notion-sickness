@@ -1,14 +1,8 @@
 import fetchCollectionItems from "../notionRequests/fetchCollectionItems";
 import fetchPage, { PageSchema, PropertyType } from "../notionRequests/fetchPage";
+import getCollectionInfo from "../util/getCollectionInfo";
+import { getPageInfo } from "../util/getCurrentPageInfo";
 import getCoverImgFromPageData from "./getCoverImgFromPageData";
-
-
-const getDbBlocks = (dings: any) => {
-
-    const huch = Object.values(dings?.recordMap?.block ?? {})?.filter((i: any) => typeof i?.value?.value?.collection_id === "string")
-
-    return huch
-}
 
 const pageCache: { [key: string]: any } = {}
 
@@ -75,26 +69,18 @@ const toNewEntries = (schema: PageSchema) => async ([key, value]: any): Promise<
     // @ts-ignore
     const { name, type } = schema[key]
 
-    // const values = (await getValues(value, type, key)).filter(i => i != null && i !== ",")
-
     const values = (await getValues(value, type, key, name)).filter(i => i != null)
-
-    // const isEqual = values.every((i, idx) => newValues[idx] === i)
-
-    // if (!isEqual) console.log("not equal:", { values, newValues })
 
     return [name, values]
 }
 
 const isPlainValue = (value: PropertyValue): value is PlainValue => value[0]?.length === 1
 const isLinkValue = (value: PropertyValue): value is LinkValue => value[0]?.[1]?.[0]?.[0] === "a"
-const isRelationValue = (value: PropertyValue): value is RelationValue => value[0]?.[1]?.[0]?.[0] === "p"
 // [["Aisling Keane",[["b"],["b"]]]]
 const isBValue = (value: PropertyValue): boolean => value[0]?.[1]?.[0]?.[0] === "b"
+const isRelationValue = (value: PropertyValue): value is RelationValue => value[0]?.[1]?.[0]?.[0] === "p"
 
 const getValues = async (value: PropertyValue, type: PropertyType, key: string, name: string): Promise<string[]> => {
-
-    // console.log(name, isPlainValue(value), isLinkValue(value), isBValue(value))
 
     if (isPlainValue(value)) return value[0] as string[]
     // @ts-ignore
@@ -102,7 +88,7 @@ const getValues = async (value: PropertyValue, type: PropertyType, key: string, 
     // @ts-ignore
     if (isBValue(value)) return [value[0][0]]
 
-    return Promise.all(value.filter(i => i[0] !== ",").map(async i => {
+    if (isRelationValue(value)) return Promise.all(value.filter(i => i[0] !== ",").map(async i => {
 
         // @ts-ignore
         const [signifier, [[pi, pageId, spaceId]]] = i
@@ -110,23 +96,16 @@ const getValues = async (value: PropertyValue, type: PropertyType, key: string, 
         try {
             const foreignPage = await loadPage(pageId)
 
-            // @ts-ignore
-            const collectionId = getDbBlocks(foreignPage)?.[0]?.value?.value?.collection_id
+            const { viewId, collectionId, hasCollection } = getPageInfo(foreignPage);
 
-            const viewId = Object.keys(foreignPage?.recordMap?.collection_view ?? {})?.[0]
-
-            const wasPageDeleted = collectionId == null || viewId == null
-
-            if (wasPageDeleted) return undefined
+            if (!hasCollection) return null
 
             const collectionData = await loadCollection(collectionId, collectionId, viewId)
 
-            const keyToValue = Object
-                .entries(collectionData.recordMap.block)
-                .reduce((obj, [key, i]: any) => ({ ...obj, [key]: i?.value?.value?.properties?.title?.[0]?.[0] }), {})
+            const { foreignKeyToTitle } = getCollectionInfo(collectionData)
 
             // @ts-ignore
-            return keyToValue[pageId]
+            return foreignKeyToTitle[pageId]
 
         } catch (err) {
 
@@ -135,5 +114,6 @@ const getValues = async (value: PropertyValue, type: PropertyType, key: string, 
             return null
         }
     }))
+    return []
 }
 export default toRefinedItem
